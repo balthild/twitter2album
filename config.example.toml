@@ -1,0 +1,8 @@
+TelegramBotToken = "1145141919:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-XXX"
+TelegramChatWhitelist = [
+    114514,
+    1919810,
+]
+
+TwitterUsername = "114_514"
+TwitterPassword = "1919_810"
