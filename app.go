@@ -53,7 +53,13 @@ func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
 		return
 	}
 
-	if tweetUrl.Host != "twitter.com" {
+	twitterHosts := []string{
+		"twitter.com",
+		"x.com",
+		"vxtwitter.com",
+		"fxtwitter.com",
+	}
+	if !slices.Contains(twitterHosts, tweetUrl.Host) {
 		ctx.reply(message, "Invalid tweet URL")
 		return
 	}
