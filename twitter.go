@@ -65,7 +65,12 @@ func loginTwitter(config AppConfig, scraper *twitterscraper.Scraper) {
 
 var TWEET_EMBEDDED_URL = regexp.MustCompile(`https://t\.co/\w+`)
 
-func transformTweetText(tweet *twitterscraper.Tweet) string {
+func transformTweetText(tweet *twitterscraper.Tweet, noText bool) string {
+	source := fmt.Sprintf(`<a href="%s">source</a>`, tweet.PermanentURL)
+	if noText {
+		return source
+	}
+
 	i := 0
 	text := TWEET_EMBEDDED_URL.ReplaceAllStringFunc(tweet.Text, func(s string) string {
 		if i >= len(tweet.URLs) {
@@ -77,7 +82,6 @@ func transformTweetText(tweet *twitterscraper.Tweet) string {
 	})
 
 	text = strings.TrimSpace(text)
-	text = fmt.Sprintf(`%s <a href="%s">source</a>`, text, tweet.PermanentURL)
 
-	return text
+	return fmt.Sprintf(`%s %s`, text, source)
 }

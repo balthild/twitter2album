@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/url"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -11,9 +13,10 @@ import (
 )
 
 type AppContext struct {
-	config  AppConfig
-	bot     *tgbotapi.BotAPI
-	scraper *twitterscraper.Scraper
+	config     AppConfig
+	bot        *tgbotapi.BotAPI
+	scraper    *twitterscraper.Scraper
+	noTextMode *UserFlags
 }
 
 func (ctx AppContext) run() {
@@ -21,6 +24,8 @@ func (ctx AppContext) run() {
 	u.Timeout = 60
 
 	updates := ctx.bot.GetUpdatesChan(u)
+
+	log.Println("Listening for bot updates...")
 
 	for update := range updates {
 		if update.Message != nil {
@@ -44,6 +49,16 @@ func (ctx AppContext) chatInWhitelist(message *tgbotapi.Message) bool {
 func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
 	if !ctx.chatInWhitelist(message) {
 		ctx.reply(message, fmt.Sprintf("User ID: <code>%d</code>", message.From.ID))
+		return
+	}
+
+	if strings.TrimSpace(message.Text) == "/notext" {
+		new := ctx.noTextMode.Toggle(message.From.ID)
+		if new {
+			ctx.reply(message, "No Text Mode turned on")
+		} else {
+			ctx.reply(message, "No Text Mode turned off")
+		}
 		return
 	}
 
@@ -86,12 +101,13 @@ func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
 		spew.Dump(tweet)
 	}
 
+	noText := ctx.noTextMode.Get(message.From.ID)
 	hasSetCaption := false
 	setCaption := func(media *tgbotapi.BaseInputMedia) {
 		if !hasSetCaption {
 			hasSetCaption = true
 			media.ParseMode = "HTML"
-			media.Caption = transformTweetText(tweet)
+			media.Caption = transformTweetText(tweet, noText)
 		}
 	}
 
