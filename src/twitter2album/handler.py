@@ -16,13 +16,13 @@ class Handler(MessageHandler):
 
     async def handle(self, bot: Client, message: Message):
         try:
-            inner = InnerHandler(self.config, self.twitter, bot, message)
+            inner = _HandlerInner(self.config, self.twitter, bot, message)
             await inner.handle()
         except Exception as e:
             await message.reply(str(e))
 
 
-class InnerHandler:
+class _HandlerInner:
     def __init__(self, config: Config, twitter: API, bot: Client, message: Message):
         self.config = config
         self.twitter = twitter
@@ -45,27 +45,31 @@ class InnerHandler:
     async def handle_notext(self):
         pass
 
-    async def handle_tweet(self, twurl: str, notext: bool|None = None):
-        urlparsed = urlparse(twurl)
+    async def handle_tweet(self, twurl: str, notext: bool | None = None):
+        domains = [
+            'twitter.com',
+            'x.com',
+            'vxtwitter.com',
+            'fxtwitter.com',
+        ]
 
-        match urlparsed.netloc:
-            case 'twitter.com': pass
-            case 'x.com': pass
-            case 'vxtwitter.com': pass
-            case 'fxtwitter.com': pass
-            case _: raise Exception('Invalid tweet URL')
+        urlobj = urlparse(twurl)
+        if urlobj.netloc not in domains:
+            raise Exception('Invalid tweet URL')
 
-        match urlparsed.path.split('/'):
-            case ['', _, 'status', twid]: pass
-            case _: raise Exception('Invalid tweet URL')
+        match urlobj.path.split('/'):
+            case ['', _, 'status', twid, *_]:
+                twid = int(twid)
+            case _:
+                raise Exception('Invalid tweet URL')
 
-        tweet = await self.twitter.tweet_details(int(twid))
+        tweet = await self.twitter.tweet_details(twid)
         if tweet is None:
-            raise Exception(f'Tweet with ID {twid} not found')
+            raise Exception(f'Tweet {twid} not found')
 
         match tweet.media:
             case Media(photos=[], videos=[], animated=[]):
-                raise Exception('The tweet contains no media')
+                raise Exception(f'Tweet {twid} contains no media')
 
         group = []
 
@@ -74,14 +78,20 @@ class InnerHandler:
             group.append(InputMediaPhoto(photo.url, caption=caption))
 
         for video in tweet.media.videos:
-            variants = [x for x in video.variants if x.contentType == 'video/mp4']
-            if not variants:
-                formats = ', '.join(set([x.contentType for x in video.variants]))
+            candidate = None
+            for variant in video.variants:
+                if variant.contentType != 'video/mp4':
+                    continue
+                if candidate is None or variant.bitrate > candidate.bitrate:
+                    candidate = variant
+
+            if candidate is None:
+                formats = [x.contentType for x in video.variants]
+                formats = ', '.join(set(formats))
                 raise Exception(f'Unrecognized video formats: {formats}')
 
-            variant = max(variants, key=lambda x: x.bitrate)
             caption = '' if group else render_content(tweet, notext)
-            group.append(InputMediaVideo(variant.url, caption=caption))
+            group.append(InputMediaVideo(candidate.url, caption=caption))
 
         for gif in tweet.media.animated:
             caption = '' if group else render_content(tweet, notext)
