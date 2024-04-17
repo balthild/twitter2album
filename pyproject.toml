@@ -11,12 +11,11 @@ dependencies = [
     "twscrape",
     "pyrogram",
     "tgcrypto",
+    "uvloop",
 ]
 
 [project.scripts]
 twitter2album-bot = "twitter2album:main"
-
-[tool]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/twitter2album"]

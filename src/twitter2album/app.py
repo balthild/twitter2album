@@ -1,3 +1,4 @@
+import os
 from twscrape import API, logger
 from pyrogram import Client, idle
 
@@ -12,10 +13,11 @@ async def start():
     await twitter.pool.login_all()
 
     bot = Client(
-        name='twitter2album',
+        name=config.telegram.bot_token.split(':')[0],
+        bot_token=config.telegram.bot_token,
         api_id=config.telegram.api_id,
         api_hash=config.telegram.api_hash,
-        bot_token=config.telegram.bot_token,
+        workdir=os.getcwd(),
     )
     bot.add_handler(Handler(config, twitter))
 
