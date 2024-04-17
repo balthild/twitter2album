@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "twitter2album"
+version = "2024.04.17"
+requires-python = ">= 3.10"
+dependencies = [
+    "tomli",
+    "twscrape",
+    "pyrogram",
+    "tgcrypto",
+]
+
+[project.scripts]
+twitter2album-bot = "twitter2album:main"
+
+[tool]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/twitter2album"]
