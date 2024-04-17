@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -12,55 +11,68 @@ import (
 	twitterscraper "github.com/n0madic/twitter-scraper"
 )
 
-func loadTwitterCookies(scraper *twitterscraper.Scraper) {
+func loadTwitterCookies(scraper *twitterscraper.Scraper) error {
 	f, err := os.Open("cookies.json")
 	if os.IsNotExist(err) {
-		return
+		return nil
 	}
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
 
 	var cookies []*http.Cookie
 	err = json.NewDecoder(f).Decode(&cookies)
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
 
 	scraper.SetCookies(cookies)
+
+	return nil
 }
 
-func saveTwitterCookies(scraper *twitterscraper.Scraper) {
+func saveTwitterCookies(scraper *twitterscraper.Scraper) error {
 	cookies := scraper.GetCookies()
 
 	data, err := json.Marshal(cookies)
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
 
 	f, err := os.Create("cookies.json")
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
 
 	_, err = f.Write(data)
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
+
+	return nil
 }
 
-func loginTwitter(config AppConfig, scraper *twitterscraper.Scraper) {
-	loadTwitterCookies(scraper)
-	if scraper.IsLoggedIn() {
-		return
-	}
-
-	err := scraper.Login(config.TwitterUsername, config.TwitterPassword)
+func loginTwitter(config AppConfig, scraper *twitterscraper.Scraper) error {
+	err := loadTwitterCookies(scraper)
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
 
-	saveTwitterCookies(scraper)
+	if scraper.IsLoggedIn() {
+		return nil
+	}
+
+	err = scraper.Login(config.TwitterUsername, config.TwitterPassword)
+	if err != nil {
+		return err
+	}
+
+	err = saveTwitterCookies(scraper)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var TWEET_EMBEDDED_URL = regexp.MustCompile(`https://t\.co/\w+`)

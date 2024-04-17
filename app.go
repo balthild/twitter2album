@@ -29,42 +29,78 @@ func (ctx AppContext) run() {
 
 	for update := range updates {
 		if update.Message != nil {
-			go ctx.handleMessage(update.Message)
+			go MessageContext{&ctx, update.Message}.handleMessage(update.Message)
 		}
 	}
 }
 
-func (ctx AppContext) reply(message *tgbotapi.Message, html string) {
-	reply := tgbotapi.NewMessage(message.Chat.ID, html)
-	reply.ReplyToMessageID = message.MessageID
+type MessageContext struct {
+	*AppContext
+	message *tgbotapi.Message
+}
+
+func (ctx MessageContext) reply(html string) {
+	reply := tgbotapi.NewMessage(ctx.message.Chat.ID, html)
+	reply.ReplyToMessageID = ctx.message.MessageID
 	reply.ParseMode = "HTML"
 	reply.DisableWebPagePreview = true
 	ctx.bot.Send(reply)
 }
 
-func (ctx AppContext) chatInWhitelist(message *tgbotapi.Message) bool {
+func (ctx MessageContext) chatInWhitelist(message *tgbotapi.Message) bool {
 	return slices.Contains(ctx.config.TelegramChatWhitelist, message.Chat.ID)
 }
 
-func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
+func (ctx MessageContext) handleMessage(message *tgbotapi.Message) {
 	if !ctx.chatInWhitelist(message) {
-		ctx.reply(message, fmt.Sprintf("User ID: <code>%d</code>", message.From.ID))
+		ctx.reply(fmt.Sprintf("User ID: <code>%d</code>", message.From.ID))
 		return
 	}
 
-	if strings.TrimSpace(message.Text) == "/notext" {
+	fields := strings.Fields(message.Text)
+	if len(fields) == 0 {
+		return
+	}
+
+	if len(fields) == 1 && fields[0] == "/notext" {
 		new := ctx.noTextMode.Toggle(message.From.ID)
 		if new {
-			ctx.reply(message, "No Text Mode turned on")
+			ctx.reply("No Text Mode turned on")
 		} else {
-			ctx.reply(message, "No Text Mode turned off")
+			ctx.reply("No Text Mode turned off")
 		}
+
 		return
 	}
 
-	tweetUrl, err := url.Parse(message.Text)
+	if fields[0] == "/notext" {
+		ctx.handleTwitter(fields[1], true)
+		return
+	}
+
+	if fields[0] == "/relogin" {
+		ctx.handleReLogin()
+		return
+	}
+
+	noTextMode := ctx.noTextMode.Get(message.From.ID)
+	ctx.handleTwitter(fields[0], noTextMode)
+}
+
+func (ctx MessageContext) handleReLogin() {
+	err := loginTwitter(ctx.config, ctx.scraper)
 	if err != nil {
-		ctx.reply(message, "Invalid tweet URL")
+		ctx.reply(err.Error())
+		return
+	}
+
+	ctx.reply("Logged in.")
+}
+
+func (ctx MessageContext) handleTwitter(tweetField string, noTextMode bool) {
+	tweetUrl, err := url.Parse(tweetField)
+	if err != nil {
+		ctx.reply("Invalid tweet URL")
 		return
 	}
 
@@ -75,25 +111,25 @@ func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
 		"fxtwitter.com",
 	}
 	if !slices.Contains(twitterHosts, tweetUrl.Host) {
-		ctx.reply(message, "Invalid tweet URL")
+		ctx.reply("Invalid tweet URL")
 		return
 	}
 
 	match := TWEET_URL_PATH.FindStringSubmatch(tweetUrl.Path)
 	if len(match) != 2 {
-		ctx.reply(message, "Invalid tweet URL")
+		ctx.reply("Invalid tweet URL")
 		return
 	}
 
 	tweetId := match[1]
 	tweet, err := ctx.scraper.GetTweet(tweetId)
 	if err != nil {
-		ctx.reply(message, err.Error())
+		ctx.reply(err.Error())
 		return
 	}
 
 	if len(tweet.Photos)+len(tweet.Videos)+len(tweet.GIFs) == 0 {
-		ctx.reply(message, "The tweet contains no media")
+		ctx.reply("The tweet contains no media")
 		return
 	}
 
@@ -101,13 +137,12 @@ func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
 		spew.Dump(tweet)
 	}
 
-	noText := ctx.noTextMode.Get(message.From.ID)
 	hasSetCaption := false
 	setCaption := func(media *tgbotapi.BaseInputMedia) {
 		if !hasSetCaption {
 			hasSetCaption = true
 			media.ParseMode = "HTML"
-			media.Caption = transformTweetText(tweet, noText)
+			media.Caption = transformTweetText(tweet, noTextMode)
 		}
 	}
 
@@ -128,6 +163,6 @@ func (ctx AppContext) handleMessage(message *tgbotapi.Message) {
 		medias = append(medias, media)
 	}
 
-	album := tgbotapi.NewMediaGroup(message.Chat.ID, medias)
+	album := tgbotapi.NewMediaGroup(ctx.message.Chat.ID, medias)
 	ctx.bot.Send(album)
 }

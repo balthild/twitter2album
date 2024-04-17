@@ -26,7 +26,10 @@ func main() {
 	}
 
 	scraper := twitterscraper.New()
-	loginTwitter(config, scraper)
+	err = loginTwitter(config, scraper)
+	if err != nil {
+		log.Panic(err)
+	}
 
 	noTextMode, err := LoadUserFlags("notext.json")
 	if err != nil {
