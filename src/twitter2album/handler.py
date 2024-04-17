@@ -1,5 +1,5 @@
 from urllib.parse import urlparse
-from twscrape import API, Media, MediaPhoto, MediaVideo, MediaAnimated
+from twscrape import API, Media
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message, InputMediaPhoto, InputMediaVideo
@@ -30,7 +30,7 @@ class InnerHandler:
         self.message = message
 
     async def handle(self):
-        if self.message.chat.id not in self.config.telegram_chat_whitelist:
+        if self.message.chat.id not in self.config.telegram.chat_whitelist:
             await self.message.reply(f'Chat ID: {self.message.chat.id}')
             return
 
@@ -38,14 +38,14 @@ class InnerHandler:
             case ['/notext']:
                 await self.handle_notext()
             case ['/notext', url]:
-                await self.handle_twitter(url, True)
+                await self.handle_tweet(url, True)
             case [url, *_]:
-                await self.handle_twitter(url)
+                await self.handle_tweet(url)
 
     async def handle_notext(self):
         pass
 
-    async def handle_twitter(self, twurl: str, notext: bool|None = None):
+    async def handle_tweet(self, twurl: str, notext: bool|None = None):
         urlparsed = urlparse(twurl)
 
         match urlparsed.netloc:
@@ -70,21 +70,21 @@ class InnerHandler:
         group = []
 
         for photo in tweet.media.photos:
-            caption = '' if group else render_content(tweet, False)
+            caption = '' if group else render_content(tweet, notext)
             group.append(InputMediaPhoto(photo.url, caption=caption))
 
         for video in tweet.media.videos:
             variants = [x for x in video.variants if x.contentType == 'video/mp4']
             if not variants:
-                formats = ', '.join([x.contentType for x in video.variants])
+                formats = ', '.join(set([x.contentType for x in video.variants]))
                 raise Exception(f'Unrecognized video formats: {formats}')
 
             variant = max(variants, key=lambda x: x.bitrate)
-            caption = '' if group else render_content(tweet, False)
+            caption = '' if group else render_content(tweet, notext)
             group.append(InputMediaVideo(variant.url, caption=caption))
 
         for gif in tweet.media.animated:
-            caption = '' if group else render_content(tweet, False)
+            caption = '' if group else render_content(tweet, notext)
             group.append(InputMediaVideo(gif.videoUrl, caption=caption))
 
         await self.message.reply_media_group(group)
