@@ -12,6 +12,7 @@ dependencies = [
     "pyrogram",
     "tgcrypto",
     "uvloop",
+    "aiohttp",
 ]
 
 [project.scripts]

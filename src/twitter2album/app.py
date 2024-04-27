@@ -1,4 +1,5 @@
 import os
+from aiohttp import ClientSession
 from twscrape import API, logger
 from pyrogram import Client, idle
 
@@ -13,6 +14,8 @@ async def start():
     await twitter.pool.add_account(config.twitter.username, config.twitter.password, '', '')
     await twitter.pool.login_all()
 
+    http = ClientSession()
+
     bot = Client(
         name=config.telegram.bot_token.split(':')[0],
         bot_token=config.telegram.bot_token,
@@ -20,7 +23,7 @@ async def start():
         api_hash=config.telegram.api_hash,
         workdir=os.getcwd(),
     )
-    bot.add_handler(Handler(config, twitter))
+    bot.add_handler(Handler(config, twitter, http))
 
     logger.info('Starting bot')
     async with bot:
