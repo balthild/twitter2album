@@ -114,8 +114,9 @@ class _HandlerInner:
 
         album[0].caption = render_content(tweet, notext)
 
-        # Pyrogram cannot send GIF as video in an album
         if tweet.media.animated:
+            # GIF in album requires uploading from local with `nosound_video` flag
+            # So I send the album via Bot API
             await self.bot_api_reply_media_group(album)
         else:
             await self.message.reply_media_group(album)

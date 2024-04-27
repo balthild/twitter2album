@@ -30,3 +30,4 @@ async def start():
         logger.info('Handling incoming messages (Ctrl+C to stop)')
         await idle()
         logger.info('Stopping bot')
+        await http.close()
