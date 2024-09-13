@@ -63,8 +63,11 @@ class _HandlerInner:
     async def handle_relogin(self):
         await self.twitter.pool.delete_inactive()
         await self.twitter.pool.add_account(self.config.twitter.username, self.config.twitter.password, '', '')
+
         result = await self.twitter.pool.login_all()
-        await self.message.reply(f'Success: {result['success']}\nFailed: {result['failed']}')
+        success, failed = result['success'], result['failed']
+
+        await self.message.reply(f'Success: {success}\nFailed: {failed}')
 
     async def handle_notext(self):
         return
