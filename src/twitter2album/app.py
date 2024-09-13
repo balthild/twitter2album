@@ -26,8 +26,7 @@ async def start():
     bot.add_handler(Handler(config, twitter, http))
 
     logger.info('Starting bot')
-    async with bot:
+    async with http, bot:
         logger.info('Handling incoming messages (Ctrl+C to stop)')
         await idle()
         logger.info('Stopping bot')
-        await http.close()

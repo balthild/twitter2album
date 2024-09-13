@@ -28,7 +28,7 @@ class Handler(MessageHandler):
             await message.reply(str(e))
         except Exception as e:
             logger.error(str(e))
-            print(traceback.format_exc())
+            traceback.print_exc()
             await message.reply('Internal Error')
 
 
@@ -48,6 +48,8 @@ class _HandlerInner:
         match self.message.text.split():
             case ['/chatid']:
                 await self.handle_chatid()
+            case ['/relogin']:
+                await self.handle_relogin()
             case ['/notext']:
                 await self.handle_notext()
             case ['/notext', url]:
@@ -57,6 +59,12 @@ class _HandlerInner:
 
     async def handle_chatid(self):
         await self.message.reply(f'Chat ID: {self.message.chat.id}')
+
+    async def handle_relogin(self):
+        await self.twitter.pool.delete_inactive()
+        await self.twitter.pool.add_account(self.config.twitter.username, self.config.twitter.password, '', '')
+        result = await self.twitter.pool.login_all()
+        await self.message.reply(f'Success: {result['success']}\nFailed: {result['failed']}')
 
     async def handle_notext(self):
         return
