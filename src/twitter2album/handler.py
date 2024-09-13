@@ -79,6 +79,8 @@ class _HandlerInner:
         domains = [
             'twitter.com',
             'x.com',
+            'fixvx.com',
+            'fixupx.com',
             'vxtwitter.com',
             'fxtwitter.com',
         ]
