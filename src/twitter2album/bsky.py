@@ -13,9 +13,9 @@ class BskyClient(AsyncClient):
         self.config = config.bsky
 
     async def authenticate(self):
-        self.on_session_change(_persist_session)
+        self.on_session_change(persist_session)
 
-        session = _get_session()
+        session = get_session()
         if session:
             logger.info('Signing in Bluesky with saved session')
             return await self.login(session_string=session)
@@ -27,7 +27,7 @@ class BskyClient(AsyncClient):
         await self.authenticate()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, *args):
         pass
 
 
@@ -73,7 +73,7 @@ def render_bsky_post(post: PostView, notext: bool) -> str:
     return f'{content}{sep}{source}'.strip()
 
 
-def _get_session() -> str:
+def get_session() -> str:
     try:
         with open('bsky.session') as f:
             return f.read()
@@ -81,7 +81,7 @@ def _get_session() -> str:
         return None
 
 
-async def _persist_session(event: SessionEvent, session: Session):
+async def persist_session(event: SessionEvent, session: Session):
     if (event in (SessionEvent.CREATE, SessionEvent.REFRESH)):
         with open('bsky.session', 'w') as f:
             f.write(session.export())

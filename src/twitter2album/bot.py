@@ -21,9 +21,9 @@ from twitter2album.utils import dbg
 
 async def start():
     logger.info('Starting bot')
-    async with Context() as ctx:
+    async with Context():
         logger.info('Handling incoming messages (Ctrl+C to stop)')
-        await ctx.idle()
+        await idle()
         logger.info('Stopping bot')
 
 
@@ -43,9 +43,6 @@ class Context:
         )
         self.bot.add_handler(MessageHandler(self.handle, filters.text))
 
-    async def idle():
-        return await idle()
-
     async def handle(self, bot: Client, message: Message):
         try:
             handler = Handler(self, bot, message)
@@ -64,11 +61,11 @@ class Context:
         await self.bot.__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.bot.__aexit__(exc_type, exc_val, exc_tb)
-        await self.twitter.__aexit__(exc_type, exc_val, exc_tb)
-        await self.bsky.__aexit__(exc_type, exc_val, exc_tb)
-        await self.http.__aexit__(exc_type, exc_val, exc_tb)
+    async def __aexit__(self, *args):
+        await self.bot.__aexit__(*args)
+        await self.twitter.__aexit__(*args)
+        await self.bsky.__aexit__(*args)
+        await self.http.__aexit__(*args)
 
 
 class Handler:

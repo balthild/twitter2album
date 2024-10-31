@@ -5,14 +5,14 @@ import tomli
 
 
 @dataclass(frozen=True)
-class _Telegram:
-    api_id: str = None
-    api_hash: str = None
-    bot_token: str = None
-    chat_whitelist: list[int] = None
+class Telegram:
+    api_id: str
+    api_hash: str
+    bot_token: str
+    chat_whitelist: list[int]
 
     def deserialize(values: dict) -> Self:
-        return _Telegram(
+        return Telegram(
             api_id=values['api_id'],
             api_hash=values['api_hash'],
             bot_token=values['bot_token'],
@@ -21,31 +21,31 @@ class _Telegram:
 
 
 @dataclass(frozen=True)
-class _Twitter:
-    username: str = None
-    password: str = None
+class Twitter:
+    username: str
+    password: str
 
     def deserialize(values: dict) -> Self:
-        return _Twitter(
+        return Twitter(
             username=values['username'],
             password=values['password'],
         )
 
 
 @dataclass(frozen=True)
-class _Bsky:
-    username: str = None
-    password: str = None
+class Bsky:
+    username: str
+    password: str
 
     def deserialize(values: dict) -> Self:
-        return _Bsky(
+        return Bsky(
             username=values['username'],
             password=values['password'],
         )
 
 
 @dataclass(frozen=True)
-class _Domains:
+class Domains:
     twitter = [
         'twitter.com',
         'x.com',
@@ -62,17 +62,17 @@ class _Domains:
 
 @dataclass(frozen=True)
 class Config:
-    telegram: _Telegram
-    twitter: _Twitter
-    bsky: _Bsky
+    telegram: Telegram
+    twitter: Twitter
+    bsky: Bsky
 
-    domains = _Domains()
+    domains = Domains()
 
     def deserialize(values: dict) -> Self:
         return Config(
-            telegram=_Telegram.deserialize(values['telegram']),
-            twitter=_Twitter.deserialize(values['twitter']),
-            bsky=_Bsky.deserialize(values['bsky']),
+            telegram=Telegram.deserialize(values['telegram']),
+            twitter=Twitter.deserialize(values['twitter']),
+            bsky=Bsky.deserialize(values['bsky']),
         )
 
     def load() -> Self:
