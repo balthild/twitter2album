@@ -1,8 +1,11 @@
 import sqlite3
 import traceback
-from urllib.parse import urlparse
+from typing import Self
+from urllib.parse import urlparse, ParseResult as URL
 from aiohttp import ClientSession
-from twscrape import API, logger
+from atproto_client.models.app.bsky.embed.images import View as ImagesView
+from atproto_client.models.app.bsky.embed.video import View as VideoView
+from loguru import logger
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message, InputMedia, InputMediaPhoto, InputMediaVideo
@@ -10,15 +13,18 @@ from pyrogram.enums import ChatType
 
 from twitter2album.config import Config
 from twitter2album.error import UserException
-from twitter2album.tweet import render_content
+from twitter2album.twitter import TwitterClient, render_tweet
+from twitter2album.bsky import BskyClient, render_bsky_post
+from twitter2album.utils import dbg
 
 
 class Handler(MessageHandler):
-    def __init__(self, config: Config, twitter: API, http: ClientSession):
+    def __init__(self, config: Config):
         super().__init__(self.handle, filters.text)
         self.config = config
-        self.twitter = twitter
-        self.http = http
+        self.twitter = TwitterClient(config)
+        self.bsky = BskyClient(config)
+        self.http = ClientSession()
 
     async def handle(self, bot: Client, message: Message):
         try:
@@ -31,12 +37,26 @@ class Handler(MessageHandler):
             traceback.print_exc()
             await message.reply('Internal Error')
 
+    async def __aenter__(self) -> Self:
+        await self.twitter.__aenter__()
+        await self.bsky.__aenter__()
+        await self.http.__aenter__()
+
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.twitter.__aexit__(exc_type, exc_val, exc_tb)
+        await self.bsky.__aexit__(exc_type, exc_val, exc_tb)
+        await self.http.__aexit__(exc_type, exc_val, exc_tb)
+
 
 class _HandlerInner:
     def __init__(self, handler: Handler, bot: Client, message: Message):
         self.config = handler.config
         self.twitter = handler.twitter
+        self.bsky = handler.bsky
         self.http = handler.http
+
         self.bot = bot
         self.message = message
 
@@ -53,20 +73,15 @@ class _HandlerInner:
             case ['/notext']:
                 await self.handle_notext()
             case ['/notext', url]:
-                await self.handle_tweet(url, True)
+                await self.handle_resource(url, True)
             case [url, *_]:
-                await self.handle_tweet(url)
+                await self.handle_resource(url)
 
     async def handle_chatid(self):
         await self.message.reply(f'Chat ID: {self.message.chat.id}')
 
     async def handle_relogin(self):
-        await self.twitter.pool.delete_inactive()
-        await self.twitter.pool.add_account(self.config.twitter.username, self.config.twitter.password, '', '')
-
-        result = await self.twitter.pool.login_all()
-        success, failed = result['success'], result['failed']
-
+        success, failed = await self.twitter.relogin()
         await self.message.reply(f'Success: {success}\nFailed: {failed}')
 
     async def handle_notext(self):
@@ -75,21 +90,18 @@ class _HandlerInner:
         settings.execute('')
         pass
 
-    async def handle_tweet(self, twurl: str, notext: bool | None = None):
-        domains = [
-            'twitter.com',
-            'x.com',
-            'fixvx.com',
-            'fixupx.com',
-            'vxtwitter.com',
-            'fxtwitter.com',
-        ]
+    async def handle_resource(self, url: str, notext: bool):
+        parsed = urlparse(url)
 
-        urlobj = urlparse(twurl)
-        if urlobj.netloc not in domains:
-            raise UserException('Invalid tweet URL')
+        if parsed.netloc in self.config.domains.twitter:
+            return await self.handle_tweet(parsed, notext)
+        elif parsed.netloc in self.config.domains.bsky:
+            return await self.handle_bsky(parsed, notext)
 
-        match urlobj.path.split('/'):
+        raise UserException('Unrecognized URL')
+
+    async def handle_tweet(self, url: URL, notext: bool):
+        match url.path.split('/'):
             case ['', _, 'status', twid, *_]:
                 twid = int(twid)
             case _:
@@ -97,7 +109,7 @@ class _HandlerInner:
 
         tweet = await self.twitter.tweet_details(twid)
         if tweet is None:
-            raise UserException(f'Tweet {twid} not found')
+            raise UserException(f'Tweet `{twid}` not found')
 
         album = []
 
@@ -123,9 +135,9 @@ class _HandlerInner:
             album.append(InputMediaVideo(gif.videoUrl))
 
         if not album:
-            raise UserException(f'Tweet {twid} contains no media')
+            raise UserException(f'Tweet `{twid}` contains no media')
 
-        album[0].caption = render_content(tweet, notext)
+        album[0].caption = render_tweet(tweet, notext)
 
         if tweet.media.animated:
             # GIF in album requires uploading from local with `nosound_video` flag
@@ -133,6 +145,37 @@ class _HandlerInner:
             await self.bot_api_reply_media_group(album)
         else:
             await self.message.reply_media_group(album)
+
+    async def handle_bsky(self, url: URL, notext: bool):
+        match url.path.split('/'):
+            case ['', 'profile', author, 'post', rkey, *_]:
+                uri = f'at://{author}/app.bsky.feed.post/{rkey}'
+            case _:
+                raise UserException('Invalid bsky post URL')
+
+        try:
+            response = await self.bsky.get_post_thread(uri, depth=0, parent_height=0)
+        except:
+            raise UserException(f'Post `{rkey}` not found')
+
+        album = []
+
+        match response.thread.post.embed:
+            case ImagesView(images=images):
+                for image in images:
+                    album.append(InputMediaPhoto(image.fullsize))
+
+            case VideoView():
+                # TODO
+                dbg(response.thread.post.embed)
+                pass
+
+        if not album:
+            raise UserException(f'Post `{rkey}` contains no media')
+
+        album[0].caption = render_bsky_post(response.thread.post, notext)
+
+        await self.bot_api_reply_media_group(album)
 
     async def bot_api_reply_media_group(self, album: list[InputMedia]):
         token = self.config.telegram.bot_token

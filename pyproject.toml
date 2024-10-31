@@ -8,15 +8,22 @@ version = "2024.04.17"
 requires-python = ">= 3.10"
 dependencies = [
     "tomli",
+    "atproto",
     "twscrape",
     "pyrogram",
     "tgcrypto",
     "uvloop",
     "aiohttp",
 ]
+optional-dependencies.dev = ["beeprint", "prettyprinter"]
 
 [project.scripts]
 twitter2album-bot = "twitter2album:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/twitter2album"]
+
+[tool.hatch.envs.default]
+features = ["dev"]
+
+[tool.hatch.envs.production]
