@@ -90,7 +90,7 @@ class _HandlerInner:
         settings.execute('')
         pass
 
-    async def handle_resource(self, url: str, notext: bool):
+    async def handle_resource(self, url: str, notext: bool = False):
         parsed = urlparse(url)
 
         if parsed.netloc in self.config.domains.twitter:
