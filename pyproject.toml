@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "twitter2album"
 version = "2024.04.17"
-requires-python = ">= 3.10"
+requires-python = ">= 3.11"
 dependencies = [
     "tomli",
     "atproto",
