@@ -27,3 +27,4 @@ packages = ["src/twitter2album"]
 features = ["dev"]
 
 [tool.hatch.envs.production]
+features = []
