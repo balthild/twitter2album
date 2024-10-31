@@ -14,8 +14,9 @@ dependencies = [
     "tgcrypto",
     "uvloop",
     "aiohttp",
+    "prettyprinter",
 ]
-optional-dependencies.dev = ["beeprint", "prettyprinter"]
+optional-dependencies.dev = []
 
 [project.scripts]
 twitter2album-bot = "twitter2album:main"
