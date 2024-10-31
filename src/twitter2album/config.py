@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Self
 
 import tomli
 
@@ -10,7 +11,7 @@ class _Telegram:
     bot_token: str = None
     chat_whitelist: list[int] = None
 
-    def deserialize(values: dict):
+    def deserialize(values: dict) -> Self:
         return _Telegram(
             api_id=values['api_id'],
             api_hash=values['api_hash'],
@@ -24,7 +25,7 @@ class _Twitter:
     username: str = None
     password: str = None
 
-    def deserialize(values: dict):
+    def deserialize(values: dict) -> Self:
         return _Twitter(
             username=values['username'],
             password=values['password'],
@@ -36,7 +37,7 @@ class _Bsky:
     username: str = None
     password: str = None
 
-    def deserialize(values: dict):
+    def deserialize(values: dict) -> Self:
         return _Bsky(
             username=values['username'],
             password=values['password'],
@@ -67,14 +68,14 @@ class Config:
 
     domains = _Domains()
 
-    def deserialize(values: dict):
+    def deserialize(values: dict) -> Self:
         return Config(
             telegram=_Telegram.deserialize(values['telegram']),
             twitter=_Twitter.deserialize(values['twitter']),
             bsky=_Bsky.deserialize(values['bsky']),
         )
 
-    def load():
+    def load() -> Self:
         with open('./config.toml', 'rb') as f:
             values = tomli.load(f)
             return Config.deserialize(values)

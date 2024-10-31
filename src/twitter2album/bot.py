@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import traceback
 from typing import Self
@@ -6,7 +7,7 @@ from aiohttp import ClientSession
 from atproto_client.models.app.bsky.embed.images import View as ImagesView
 from atproto_client.models.app.bsky.embed.video import View as VideoView
 from loguru import logger
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message, InputMedia, InputMediaPhoto, InputMediaVideo
 from pyrogram.enums import ChatType
@@ -18,18 +19,37 @@ from twitter2album.bsky import BskyClient, render_bsky_post
 from twitter2album.utils import dbg
 
 
-class Handler(MessageHandler):
-    def __init__(self, config: Config):
-        super().__init__(self.handle, filters.text)
-        self.config = config
-        self.twitter = TwitterClient(config)
-        self.bsky = BskyClient(config)
+async def start():
+    logger.info('Starting bot')
+    async with Context() as ctx:
+        logger.info('Handling incoming messages (Ctrl+C to stop)')
+        await ctx.idle()
+        logger.info('Stopping bot')
+
+
+class Context:
+    def __init__(self):
+        self.config = Config.load()
+        self.twitter = TwitterClient(self.config)
+        self.bsky = BskyClient(self.config)
         self.http = ClientSession()
+
+        self.bot = Client(
+            name=self.config.telegram.bot_token.split(':')[0],
+            bot_token=self.config.telegram.bot_token,
+            api_id=self.config.telegram.api_id,
+            api_hash=self.config.telegram.api_hash,
+            workdir=os.getcwd(),
+        )
+        self.bot.add_handler(MessageHandler(self.handle, filters.text))
+
+    async def idle():
+        return await idle()
 
     async def handle(self, bot: Client, message: Message):
         try:
-            inner = _HandlerInner(self, bot, message)
-            await inner.handle()
+            handler = Handler(self, bot, message)
+            await handler.handle()
         except UserException as e:
             await message.reply(str(e))
         except Exception as e:
@@ -41,21 +61,22 @@ class Handler(MessageHandler):
         await self.twitter.__aenter__()
         await self.bsky.__aenter__()
         await self.http.__aenter__()
-
+        await self.bot.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.bot.__aexit__(exc_type, exc_val, exc_tb)
         await self.twitter.__aexit__(exc_type, exc_val, exc_tb)
         await self.bsky.__aexit__(exc_type, exc_val, exc_tb)
         await self.http.__aexit__(exc_type, exc_val, exc_tb)
 
 
-class _HandlerInner:
-    def __init__(self, handler: Handler, bot: Client, message: Message):
-        self.config = handler.config
-        self.twitter = handler.twitter
-        self.bsky = handler.bsky
-        self.http = handler.http
+class Handler:
+    def __init__(self, ctx: Context, bot: Client, message: Message):
+        self.config = ctx.config
+        self.twitter = ctx.twitter
+        self.bsky = ctx.bsky
+        self.http = ctx.http
 
         self.bot = bot
         self.message = message
