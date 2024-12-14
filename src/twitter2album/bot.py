@@ -130,6 +130,8 @@ class TextHandler(ContextualHandler):
         await self.message.reply(text)
 
     async def handle(self):
+        if self.message.chat.id == self.config.telegram.forward_to:
+            return
         if self.message.chat.id not in self.config.telegram.chat_whitelist:
             await self.handle_chatid()
             return
@@ -167,6 +169,8 @@ class ButtonHandler(ContextualHandler):
         await self.message.reply(text)
 
     async def handle(self):
+        if self.message.chat.id == self.config.telegram.forward_to:
+            return
         if self.message.chat.id not in self.config.telegram.chat_whitelist:
             return
 
