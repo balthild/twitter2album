@@ -103,7 +103,7 @@ class ContextualHandler:
         content = post.render()
 
         source = f'<a href="{url}">source</a>'
-        sep = '\n' if '\n' in content else ''
+        sep = '\n' if '\n' in content else ' '
         album[0].caption = f'{content}{sep}{source}'.strip()
 
         [message] = await self.bot.send_media_group(chat.id, album)
@@ -195,7 +195,7 @@ class ButtonHandler(ContextualHandler):
         url = post.url()
         source = f'<a href="{url}">source</a>'
         content = post.render()
-        sep = '\n' if '\n' in content else ''
+        sep = '\n' if '\n' in content else ' '
 
         caption = f'{content}{sep}{source}'.strip()
         buttons = self.get_action_buttons()
