@@ -2,4 +2,4 @@ __pycache__
 config.toml
 accounts.db
 *.session
-*.session-journal
+*.session-*

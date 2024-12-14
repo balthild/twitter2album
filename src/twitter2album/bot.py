@@ -1,22 +1,18 @@
 import os
-import sqlite3
 import traceback
 from typing import Self
-from urllib.parse import urlparse, ParseResult as URL
+from urllib.parse import urlparse
 from aiohttp import ClientSession
-from atproto_client.models.app.bsky.embed.images import View as ImagesView
-from atproto_client.models.app.bsky.embed.video import View as VideoView
 from loguru import logger
 from pyrogram import Client, filters, idle
-from pyrogram.handlers import MessageHandler
-from pyrogram.types import Message, InputMedia, InputMediaPhoto, InputMediaVideo
-from pyrogram.enums import ChatType
+from pyrogram.handlers import MessageHandler, CallbackQueryHandler
+from pyrogram.types import CallbackQuery, Chat, Message, InputMedia, InputMediaPhoto, InputMediaVideo, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.enums import MessageEntityType
 
 from twitter2album.config import Config
 from twitter2album.error import UserException
-from twitter2album.twitter import TwitterClient, render_tweet
-from twitter2album.bsky import BskyClient, render_bsky_post
-from twitter2album.utils import dbg
+from twitter2album.twitter import TweetEx, TwitterClient
+from twitter2album.bsky import BskyClient, BskyPostEx
 
 
 async def start():
@@ -41,18 +37,9 @@ class Context:
             api_hash=self.config.telegram.api_hash,
             workdir=os.getcwd(),
         )
-        self.bot.add_handler(MessageHandler(self.handle, filters.text))
 
-    async def handle(self, bot: Client, message: Message):
-        try:
-            handler = Handler(self, bot, message)
-            await handler.handle()
-        except UserException as e:
-            await message.reply(str(e))
-        except Exception as e:
-            logger.error(str(e))
-            traceback.print_exc()
-            await message.reply('Internal Error')
+        self.bot.add_handler(MessageHandler(TextHandler(self).forward, filters.text))
+        self.bot.add_handler(CallbackQueryHandler(ButtonHandler(self).forward))
 
     async def __aenter__(self) -> Self:
         await self.twitter.__aenter__()
@@ -68,19 +55,83 @@ class Context:
         await self.http.__aexit__(*args)
 
 
-class Handler:
-    def __init__(self, ctx: Context, bot: Client, message: Message):
+class ContextualHandler:
+    def __init__(self, ctx: Context):
         self.config = ctx.config
         self.twitter = ctx.twitter
         self.bsky = ctx.bsky
         self.http = ctx.http
+        self.bot = ctx.bot
 
-        self.bot = bot
+    async def forward(self, bot: Client, *args):
+        try:
+            await self.assign(*args)
+            await self.handle()
+        except UserException as e:
+            await self.notify(str(e))
+        except Exception as e:
+            logger.error(str(e))
+            traceback.print_exc()
+            await self.notify('Internal Error')
+
+    async def assign(self, *args): ...
+    async def notify(self, text: str): ...
+    async def handle(self): ...
+
+    async def get_post(self, url: str):
+        parsed = urlparse(url)
+        if parsed.netloc in self.config.domains.twitter:
+            return await self.twitter.get_tweet_ex(parsed)
+        elif parsed.netloc in self.config.domains.bsky:
+            return await self.bsky.get_post_ex(parsed)
+        else:
+            raise UserException('Unrecognized URL')
+
+    async def get_album(self, post: BskyPostEx | TweetEx):
+        album = []
+        for photo in post.photos():
+            album.append(InputMediaPhoto(photo))
+        for video in post.videos():
+            album.append(InputMediaVideo(video))
+        for gif in post.gifs():
+            album.append(InputMediaVideo(gif, disable_content_type_detection=True))
+
+        return album
+
+    async def send_album(self, chat: Chat, post: BskyPostEx | TweetEx, album: list[InputMedia]):
+        url = post.url()
+        content = post.render()
+
+        source = f'<a href="{url}">source</a>'
+        sep = '\n' if '\n' in content else ''
+        album[0].caption = f'{content}{sep}{source}'.strip()
+
+        [message] = await self.bot.send_media_group(chat.id, album)
+
+        await message.edit_reply_markup(self.get_action_buttons())
+
+    def get_action_buttons(self, silent: bool = False):
+        actions = [
+            'Caption' if silent else 'Silent',
+            'Pick', 'Forward'
+        ]
+
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(action, callback_data=action)
+            for action in actions
+        ]])
+
+
+class TextHandler(ContextualHandler):
+    async def assign(self, message: Message):
         self.message = message
+
+    async def notify(self, text: str):
+        await self.message.reply(text)
 
     async def handle(self):
         if self.message.chat.id not in self.config.telegram.chat_whitelist:
-            self.handle_chatid()
+            await self.handle_chatid()
             return
 
         match self.message.text.split():
@@ -88,11 +139,7 @@ class Handler:
                 await self.handle_chatid()
             case ['/relogin']:
                 await self.handle_relogin()
-            case ['/notext']:
-                await self.handle_notext()
-            case ['/notext', url]:
-                await self.handle_resource(url, True)
-            case [url, *_]:
+            case [url]:
                 await self.handle_resource(url)
 
     async def handle_chatid(self):
@@ -102,129 +149,68 @@ class Handler:
         success, failed = await self.twitter.relogin()
         await self.message.reply(f'Success: {success}\nFailed: {failed}')
 
-    async def handle_notext(self):
-        return
-        settings = sqlite3.connect('settings.db')
-        settings.execute('')
-        pass
+    async def handle_resource(self, url: str, subset: list[int] = []):
+        post = await self.get_post(url)
+        album = await self.get_album(post)
+        if subset:
+            album = [medium for i, medium in enumerate(album) if i+1 in subset]
 
-    async def handle_resource(self, url: str, notext: bool = False):
-        parsed = urlparse(url)
+        await self.send_album(self.message.chat, post, album)
 
-        if parsed.netloc in self.config.domains.twitter:
-            return await self.handle_tweet(parsed, notext)
-        elif parsed.netloc in self.config.domains.bsky:
-            return await self.handle_bsky(parsed, notext)
 
-        raise UserException('Unrecognized URL')
+class ButtonHandler(ContextualHandler):
+    async def assign(self, query: CallbackQuery):
+        self.query = query
+        self.message = query.message
 
-    async def handle_tweet(self, url: URL, notext: bool):
-        match url.path.split('/'):
-            case ['', _, 'status', twid, *_]:
-                twid = int(twid)
+    async def notify(self, text: str):
+        await self.message.reply(text)
+
+    async def handle(self):
+        if self.message.chat.id not in self.config.telegram.chat_whitelist:
+            return
+
+        match self.query.data:
+            case 'Silent':
+                await self.handle_silent()
+            case 'Caption':
+                await self.handle_caption()
+            case 'Pick':
+                await self.handle_pick()
+            case 'Forward':
+                await self.handle_forward()
             case _:
-                raise UserException('Invalid tweet URL')
+                await self.query.answer('Unrecognized Button')
 
-        tweet = await self.twitter.tweet_details(twid)
-        if tweet is None:
-            raise UserException(f'Tweet `{twid}` not found')
+    async def handle_silent(self):
+        url = self.get_source_url()
+        source = f'<a href="{url}">source</a>'
+        buttons = self.get_action_buttons(silent=True)
+        await self.message.edit_caption(source, reply_markup=buttons)
 
-        album = []
+    async def handle_caption(self):
+        url = self.get_source_url()
+        post = await self.get_post(url)
 
-        for photo in tweet.media.photos:
-            album.append(InputMediaPhoto(photo.url))
+        url = post.url()
+        source = f'<a href="{url}">source</a>'
+        content = post.render()
+        sep = '\n' if '\n' in content else ''
 
-        for video in tweet.media.videos:
-            candidate = None
-            for variant in video.variants:
-                if variant.contentType != 'video/mp4':
-                    continue
-                if candidate is None or variant.bitrate > candidate.bitrate:
-                    candidate = variant
+        caption = f'{content}{sep}{source}'.strip()
+        buttons = self.get_action_buttons()
 
-            if candidate is None:
-                formats = [x.contentType for x in video.variants]
-                formats = ', '.join(set(formats))
-                raise UserException(f'Unrecognized video formats: {formats}')
+        await self.message.edit_caption(caption, reply_markup=buttons)
 
-            album.append(InputMediaVideo(candidate.url))
+    async def handle_pick(self):
+        await self.query.answer('TODO: pick')
 
-        for gif in tweet.media.animated:
-            album.append(InputMediaVideo(gif.videoUrl))
+    async def handle_forward(self):
+        await self.message.forward(self.config.telegram.forward_to)
+        await self.query.answer('Forwarded')
 
-        if not album:
-            raise UserException(f'Tweet `{twid}` contains no media')
-
-        album[0].caption = render_tweet(tweet, notext)
-
-        if tweet.media.animated:
-            # GIF in album requires uploading from local with `nosound_video` flag
-            # So I send the album via Bot API
-            await self.bot_api_reply_media_group(album)
-        else:
-            await self.message.reply_media_group(album)
-
-    async def handle_bsky(self, url: URL, notext: bool):
-        match url.path.split('/'):
-            case ['', 'profile', author, 'post', rkey, *_]:
-                uri = f'at://{author}/app.bsky.feed.post/{rkey}'
-            case _:
-                raise UserException('Invalid bsky post URL')
-
-        try:
-            response = await self.bsky.get_post_thread(uri, depth=0, parent_height=0)
-        except:
-            raise UserException(f'Post `{rkey}` not found')
-
-        album = []
-
-        match response.thread.post.embed:
-            case ImagesView(images=images):
-                for image in images:
-                    album.append(InputMediaPhoto(image.fullsize))
-
-            case VideoView():
-                # TODO
-                dbg(response.thread.post.embed)
-                pass
-
-        if not album:
-            raise UserException(f'Post `{rkey}` contains no media')
-
-        album[0].caption = render_bsky_post(response.thread.post, notext)
-
-        await self.bot_api_reply_media_group(album)
-
-    async def bot_api_reply_media_group(self, album: list[InputMedia]):
-        token = self.config.telegram.bot_token
-        url = f'https://api.telegram.org/bot{token}/sendMediaGroup'
-
-        body = {
-            "chat_id": self.message.chat.id,
-            "media": [],
-        }
-
-        for item in album:
-            match item:
-                case InputMediaPhoto(media=media, caption=caption):
-                    type = 'photo'
-                case InputMediaVideo(media=media, caption=caption):
-                    type = 'video'
-                case _:
-                    raise Exception('Unreachable')
-
-            body['media'].append({
-                'type': type,
-                'media': media,
-                'caption': caption,
-                'parse_mode': 'HTML'
-            })
-
-        if self.message.chat.type != ChatType.PRIVATE:
-            body["reply_parameters"] = {"message_id": self.message.id}
-
-        async with self.http.post(url, json=body) as response:
-            if response.status != 200:
-                text = await response.text()
-                text = f'Bot API error: {response.status}\n{text}'.strip()
-                raise Exception(text)
+    def get_source_url(self):
+        for entity in reversed(self.message.caption_entities):
+            if entity.type == MessageEntityType.TEXT_LINK:
+                return entity.url
+        raise UserException('Cannot find post source. Please send the source URL again')

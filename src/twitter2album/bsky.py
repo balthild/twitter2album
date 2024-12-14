@@ -1,10 +1,14 @@
 from typing import Self
 from atproto import Session, SessionEvent, AsyncClient
+from atproto_client.models.app.bsky.embed.images import View as ImagesView
+from atproto_client.models.app.bsky.embed.video import View as VideoView
 from atproto_client.models.app.bsky.feed.defs import PostView
 from atproto_client.models.app.bsky.richtext.facet import Link
 from loguru import logger
+from urllib.parse import ParseResult as URL
 
 from twitter2album.config import Config
+from twitter2album.error import UserException
 
 
 class BskyClient(AsyncClient):
@@ -23,6 +27,23 @@ class BskyClient(AsyncClient):
             logger.info('Signing in Bluesky with password')
             return await self.login(self.config.username, self.config.password)
 
+    async def get_post_ex(self, url: URL):
+        match url.path.split('/'):
+            case ['', 'profile', author, 'post', rkey, *_]:
+                uri = f'at://{author}/app.bsky.feed.post/{rkey}'
+            case _:
+                raise UserException('Invalid bsky post URL')
+
+        try:
+            response = await self.get_post_thread(uri, depth=0, parent_height=0)
+        except:
+            raise UserException(f'Post `{rkey}` not found')
+
+        if not response.thread.post.embed:
+            raise UserException(f'Post `{rkey}` contains no media')
+
+        return BskyPostEx(response.thread.post)
+
     async def __aenter__(self) -> Self:
         await self.authenticate()
         return self
@@ -31,46 +52,61 @@ class BskyClient(AsyncClient):
         pass
 
 
-def render_bsky_post(post: PostView, notext: bool) -> str:
-    [did, _, rkey] = post.uri.removeprefix('at://').split('/')
-    source = f'<a href="https://bsky.app/profile/{did}/post/{rkey}">source</a>'
-    if notext:
-        return source
+class BskyPostEx:
+    def __init__(self, inner: PostView) -> None:
+        self.inner = inner
 
-    data = bytes(post.record.text, 'utf-8')
+    def url(self) -> str:
+        [did, _, rkey] = self.inner.uri.removeprefix('at://').split('/')
+        return f'https://bsky.app/profile/{did}/post/{rkey}'
 
-    links: list[tuple[int, int, str]] = []
-    for facet in post.record.facets or []:
-        for feature in facet.features:
-            match feature:
-                case Link(uri=uri):
-                    link = (facet.index.byte_start, facet.index.byte_end, uri)
-                    links.append(link)
-                    break
+    def render(self) -> str:
+        data = bytes(self.inner.record.text, 'utf-8')
 
-    links.sort(key=lambda x: x[0])
+        links: list[tuple[int, int, str]] = []
+        for facet in self.inner.record.facets or []:
+            start = facet.index.byte_start
+            end = facet.index.byte_end
+            for feature in facet.features:
+                match feature:
+                    case Link(uri=uri):
+                        links.append((start, end, uri))
+                        break
 
-    segments = []
-    index = 0
-    for link in links:
-        start, end, url = link
+        links.sort(key=lambda x: x[0])
 
-        segments.append(data[index:start].decode())
-        index = start
+        segments = []
 
-        segments.append(f'<a href="{url}">')
+        index = 0
+        for start, end, url in links:
+            segments.append(data[index:start].decode())
+            segments.append(f'<a href="{url}">')
+            segments.append(data[start:end].decode())
+            segments.append('</a>')
+            index = end
 
-        segments.append(data[index:end].decode())
-        index = end
+        segments.append(data[index:].decode())
 
-        segments.append('</a>')
+        return ''.join(segments)
 
-    segments.append(data[index:].decode())
+    def photos(self):
+        match self.inner.embed:
+            case ImagesView(images=images):
+                return [image.fullsize for image in images]
 
-    content = ''.join(segments)
+        return []
 
-    sep = '\n' if '\n' in content else ' '
-    return f'{content}{sep}{source}'.strip()
+    def videos(self):
+        # TODO
+        match self.inner.embed:
+            case VideoView():
+                return []
+
+        return []
+
+    def gifs(self):
+        # TODO
+        return []
 
 
 def get_session() -> str:

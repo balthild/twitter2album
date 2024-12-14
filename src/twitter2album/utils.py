@@ -16,16 +16,19 @@ class DebugClass:
         self.type = type
         self.value = value
 
-    def serialize(value):
+    def serialize(value, depth=0):
+        if depth > 4:
+            return DebugClass(type(value), '...')
+
         if isinstance(value, list):
-            return [DebugClass.serialize(x) for x in value]
+            return [DebugClass.serialize(x, depth+1) for x in value]
 
         if not hasattr(value, '__dict__'):
             return value
 
         fields = {}
         for key in value.__dict__:
-            fields[key] = DebugClass.serialize(value.__dict__[key])
+            fields[key] = DebugClass.serialize(value.__dict__[key], depth+1)
 
         return DebugClass(type(value), fields)
 
