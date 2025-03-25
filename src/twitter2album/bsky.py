@@ -1,11 +1,12 @@
 from typing import Self
-from atproto import Session, SessionEvent, AsyncClient
+from urllib.parse import ParseResult as URL
+
+from atproto import AsyncClient, Session, SessionEvent
 from atproto_client.models.app.bsky.embed.images import View as ImagesView
 from atproto_client.models.app.bsky.embed.video import View as VideoView
 from atproto_client.models.app.bsky.feed.defs import PostView
 from atproto_client.models.app.bsky.richtext.facet import Link
 from loguru import logger
-from urllib.parse import ParseResult as URL
 
 from twitter2album.config import Config
 from twitter2album.error import UserException
@@ -36,7 +37,7 @@ class BskyClient(AsyncClient):
 
         try:
             response = await self.get_post_thread(uri, depth=0, parent_height=0)
-        except:
+        except Exception:
             raise UserException(f'Post `{rkey}` not found')
 
         if not response.thread.post.embed:

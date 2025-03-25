@@ -1,8 +1,9 @@
 import re
 from typing import Self
+from urllib.parse import ParseResult as URL
+
 from loguru import logger
 from twscrape import API, Tweet
-from urllib.parse import ParseResult as URL
 
 from twitter2album.config import Config
 from twitter2album.error import UserException

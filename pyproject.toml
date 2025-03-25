@@ -15,17 +15,9 @@ dependencies = [
     "aiohttp",
     "prettyprinter",
 ]
-optional-dependencies.dev = []
 
 [project.scripts]
 twitter2album-bot = "twitter2album:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/twitter2album"]
-
-[tool.hatch.envs.default]
-features = ["dev"]
-
-[tool.hatch.envs.production]
-dev-mode = false
-features = []
