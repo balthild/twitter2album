@@ -1,3 +1,5 @@
+export TWS_HTTP_BACKEND = curl
+
 .PHONY: run
 run:
 	uv run twitter2album-bot
