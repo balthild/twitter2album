@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "twitter2album"
 version = "2024.04.17"
-requires-python = ">= 3.11"
+requires-python = "~= 3.12.0"
 dependencies = [
     "tomli",
     "atproto",
@@ -22,9 +22,16 @@ twitter2album-bot = "twitter2album:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/twitter2album"]
 
-[tool.uv.sources]
-tgcrypto = {
-    git = "https://github.com/TelegramPlayground/pyrogram-tgcrypto",
-    tag = "v1.2.12",
-    marker = "sys_platform == 'linux' and platform_machine == 'aarch64'"
-}
+[tool.uv.sources.tgcrypto]
+git = "https://github.com/TelegramPlayground/pyrogram-tgcrypto"
+tag = "v1.2.12"
+marker = "sys_platform == 'linux' and platform_machine == 'aarch64'"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+ignore = ["PLR2044"]
+
+[tool.ruff.format]
+quote-style = "single"

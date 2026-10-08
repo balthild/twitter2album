@@ -1,10 +1,13 @@
-from typing import Self
+from typing import Final, Self
 from urllib.parse import ParseResult as URL
 
+import anyio
 from atproto import AsyncClient, Session, SessionEvent
+from atproto.exceptions import AtProtocolError
 from atproto_client.models.app.bsky.embed.images import View as ImagesView
 from atproto_client.models.app.bsky.embed.video import View as VideoView
-from atproto_client.models.app.bsky.feed.defs import PostView
+from atproto_client.models.app.bsky.feed.defs import PostView, ThreadViewPost
+from atproto_client.models.app.bsky.feed.post import Record
 from atproto_client.models.app.bsky.richtext.facet import Link
 from loguru import logger
 
@@ -15,7 +18,7 @@ from twitter2album.error import UserException
 class BskyClient(AsyncClient):
     def __init__(self, config: Config):
         super().__init__()
-        self.config = config.bsky
+        self.config: Final = config.bsky
 
     async def authenticate(self):
         self.on_session_change(persist_session)
@@ -37,13 +40,16 @@ class BskyClient(AsyncClient):
 
         try:
             response = await self.get_post_thread(uri, depth=0, parent_height=0)
-        except Exception:
+        except AtProtocolError:
             raise UserException(f'Post `{rkey}` not found')
 
-        if not response.thread.post.embed:
-            raise UserException(f'Post `{rkey}` contains no media')
-
-        return BskyPostEx(response.thread.post)
+        match response.thread:
+            case ThreadViewPost(post=post) if post.embed:
+                return BskyPostEx(post)
+            case ThreadViewPost(post=post):
+                raise UserException(f'Post `{rkey}` contains no media')
+            case _ as thread:
+                raise UserException(f'Post `{rkey}` has unknown type: {type(thread)}')
 
     async def __aenter__(self) -> Self:
         await self.authenticate()
@@ -55,17 +61,21 @@ class BskyClient(AsyncClient):
 
 class BskyPostEx:
     def __init__(self, inner: PostView) -> None:
-        self.inner = inner
+        if not isinstance(inner.record, Record):
+            raise UserException('Invalid post')
+
+        self.inner: Final = inner
+        self.record: Final = inner.record
 
     def url(self) -> str:
         [did, _, rkey] = self.inner.uri.removeprefix('at://').split('/')
         return f'https://bsky.app/profile/{did}/post/{rkey}'
 
     def render(self) -> str:
-        data = bytes(self.inner.record.text, 'utf-8')
+        data = bytes(self.record.text, 'utf-8')
 
         links: list[tuple[int, int, str]] = []
-        for facet in self.inner.record.facets or []:
+        for facet in self.record.facets or []:
             start = facet.index.byte_start
             end = facet.index.byte_end
             for feature in facet.features:
@@ -110,7 +120,7 @@ class BskyPostEx:
         return []
 
 
-def get_session() -> str:
+def get_session() -> str | None:
     try:
         with open('bsky.session') as f:
             return f.read()
@@ -119,6 +129,6 @@ def get_session() -> str:
 
 
 async def persist_session(event: SessionEvent, session: Session):
-    if (event in (SessionEvent.CREATE, SessionEvent.REFRESH)):
-        with open('bsky.session', 'w') as f:
-            f.write(session.export())
+    if event in (SessionEvent.CREATE, SessionEvent.REFRESH):
+        async with await anyio.open_file('bsky.session', 'w') as f:
+            await f.write(session.export())

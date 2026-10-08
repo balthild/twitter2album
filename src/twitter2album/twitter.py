@@ -1,5 +1,5 @@
 import re
-from typing import Self
+from typing import Final, Self
 from urllib.parse import ParseResult as URL
 
 from loguru import logger
@@ -12,25 +12,14 @@ from twitter2album.error import UserException
 class TwitterClient(API):
     def __init__(self, config: Config):
         super().__init__()
-        self.config = config.twitter
+        self.config: Final = config.twitter
 
     async def authenticate(self):
-        account = await self.pool.get_account(self.config.username)
-        if account:
-            logger.info('Signing in Twitter with saved session')
-        else:
-            logger.info('Signing in Twitter with password')
-            await self.pool.add_account(self.config.username, self.config.password, '', '')
+        if not self.config.cookies:
+            raise UserException('Twitter cookies are not configured')
 
-        await self.pool.login_all()
-
-    async def relogin(self):
-        await self.pool.delete_inactive()
-        await self.pool.add_account(self.config.username, self.config.password, '', '')
-
-        result = await self.pool.login_all()
-
-        return (result['success'], result['failed'])
+        logger.info('Authenticating Twitter with configured cookies')
+        await self.pool.add_account_cookies(self.config.username, self.config.cookies)
 
     async def get_tweet_ex(self, url: URL):
         match url.path.split('/'):
@@ -58,7 +47,7 @@ class TwitterClient(API):
 
 class TweetEx:
     def __init__(self, inner: Tweet) -> None:
-        self.inner = inner
+        self.inner: Final = inner
 
     def url(self):
         url = self.inner.url
@@ -68,8 +57,9 @@ class TweetEx:
         content = self.inner.rawContent
 
         for link in self.inner.links:
-            anchor = f'<a href="{link.url}">{link.text}</a>'
-            content = content.replace(link.tcourl, anchor)
+            if link.tcourl:
+                anchor = f'<a href="{link.url}">{link.text}</a>'
+                content = content.replace(link.tcourl, anchor)
 
         content = re.sub(r'https://t\.co/\w+', '', content).strip()
 

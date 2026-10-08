@@ -1,5 +1,5 @@
 import os
-from typing import Self
+from typing import Final, Self
 
 from aiohttp import ClientSession
 from pyrogram import Client
@@ -11,12 +11,12 @@ from twitter2album.twitter import TwitterClient
 
 class Context:
     def __init__(self):
-        self.config = Config.load()
-        self.twitter = TwitterClient(self.config)
-        self.bsky = BskyClient(self.config)
-        self.http = ClientSession()
+        self.config: Final = Config.load()
+        self.twitter: Final = TwitterClient(self.config)
+        self.bsky: Final = BskyClient(self.config)
+        self.http: Final = ClientSession()
 
-        self.bot = Client(
+        self.bot: Final = Client(
             name=self.config.telegram.bot_token.split(':')[0],
             bot_token=self.config.telegram.bot_token,
             api_id=self.config.telegram.api_id,
@@ -24,8 +24,10 @@ class Context:
             workdir=os.getcwd(),
         )
 
+        # import here to avoid circular import error
         from twitter2album.bot.button import ButtonHandler
         from twitter2album.bot.text import TextHandler
+
         self.bot.add_handler(TextHandler(self))
         self.bot.add_handler(ButtonHandler(self))
 

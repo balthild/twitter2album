@@ -1,9 +1,11 @@
+from typing import Final
+
 from pyrogram.enums import MessageEntityType
 from pyrogram.handlers import CallbackQueryHandler
 from pyrogram.types import CallbackQuery
 
 from twitter2album.bot.context import Context
-from twitter2album.bot.handler import ContextualHandler
+from twitter2album.bot.handler import ContextualHandler, ContextualHandlerInner
 from twitter2album.error import UserException
 
 
@@ -11,9 +13,15 @@ class ButtonHandler(ContextualHandler, CallbackQueryHandler):
     def __init__(self, ctx: Context):
         super().__init__(ctx)
 
-    async def args(self, query: CallbackQuery):
-        self.query = query
-        self.message = query.message
+    def inner(self, ctx: Context, *args) -> ContextualHandlerInner:
+        return ButtonHandlerInner(ctx, *args)
+
+
+class ButtonHandlerInner(ContextualHandlerInner):
+    def __init__(self, ctx: Context, query: CallbackQuery):
+        super().__init__(ctx)
+        self.query: Final = query
+        self.message: Final = query.message
 
     async def notify(self, text: str):
         await self.message.reply(text)
@@ -70,5 +78,4 @@ class ButtonHandler(ContextualHandler, CallbackQueryHandler):
                 if self.message.caption[start:end] == 'source':
                     return entity.url
 
-        raise UserException(
-            'Cannot find post source. Please send the source URL again')
+        raise UserException('Cannot find post source. Please send the source URL again')

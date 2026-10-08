@@ -1,6 +1,7 @@
+from collections.abc import Mapping
 from inspect import currentframe, getframeinfo
 from types import EllipsisType, NoneType
-from typing import Any, Mapping
+from typing import Any, Final
 
 from prettyprinter import cpprint
 from prettyprinter.prettyprinter import (
@@ -13,7 +14,7 @@ from prettyprinter.prettyprinter import (
 
 
 def dbg(value, depth=2):
-    caller = getframeinfo(currentframe().f_back)
+    caller = getframeinfo(currentframe().f_back)  # type: ignore
     print(f'{caller.filename}:{caller.lineno}')
     cpprint(DebugWrapper(value), depth=depth)
 
@@ -22,8 +23,8 @@ def dbg(value, depth=2):
 
 class DebugWrapper:
     def __init__(self, value: Any):
-        self.value = value
-        self.ctor = type(value)
+        self.value: Final = value
+        self.ctor: Final = type(value)
 
     def is_primitive(self):
         return isinstance(self.value, (bool, str, int, float, NoneType, EllipsisType))
@@ -62,13 +63,11 @@ def pretty_debug(wrapper: DebugWrapper, ctx: PrettyContext):
         return pretty_python_value(items, relax_once(ctx, 'sequence'))
 
     if wrapper.is_mapping():
-        fields = {key: DebugWrapper(item)
-                  for key, item in wrapper.value.items()}
+        fields = {key: DebugWrapper(item) for key, item in wrapper.value.items()}
         return pretty_python_value(fields, ctx)
 
     if wrapper.is_object():
-        fields = {key: DebugWrapper(item)
-                  for key, item in vars(wrapper.value).items()}
+        fields = {key: DebugWrapper(item) for key, item in vars(wrapper.value).items()}
         return pretty_call(ctx, wrapper.ctor, **fields)
 
     return pretty_call(ctx, wrapper.ctor, wrapper.value)

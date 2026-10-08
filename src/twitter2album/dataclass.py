@@ -3,20 +3,20 @@ import json
 from typing import Any, Self
 
 
-class SerdeDataclass:
+class DataclassExt:
     def replace(self, **kwargs) -> Self:
-        return dataclasses.replace(self, **kwargs)
+        return dataclasses.replace(self, **kwargs)  # type: ignore
 
     def serialize(self) -> dict:
-        return dataclasses.asdict(self)
+        return dataclasses.asdict(self)  # type: ignore
 
     @classmethod
     def deserialize(cls, values: dict) -> Self:
         if not dataclasses.is_dataclass(cls):
-            raise ValueError(f"{cls.__name__} must be a dataclass")
+            raise ValueError(f'{cls.__name__} must be a dataclass')
 
         args = [
-            deserialize_field(field, values[field.name])
+            deserialize_field(field, values[field.name])  #
             for field in dataclasses.fields(cls)
         ]
 
@@ -26,11 +26,13 @@ class SerdeDataclass:
         return json.dumps(self.serialize())
 
     @classmethod
-    def from_json(cls, data: str) -> str:
+    def from_json(cls, data: str) -> Self:
         return cls.deserialize(json.loads(data))
 
 
 def deserialize_field(field: dataclasses.Field, value: Any):
-    if issubclass(field.type, SerdeDataclass):
-        return field.type.deserialize(value)
-    return value
+    match field.type:
+        case type() if issubclass(field.type, DataclassExt):
+            return field.type.deserialize(value)
+        case _:
+            return value

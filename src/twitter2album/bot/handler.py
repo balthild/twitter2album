@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import traceback
+from abc import ABC, abstractmethod
+from typing import Any, Final
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -21,28 +25,38 @@ from twitter2album.error import UserException
 from twitter2album.twitter import TweetEx
 
 
-class ContextualHandler(Handler):
-    def __init__(self, ctx: Context, filters: Filter = None):
-        super().__init__(self.forward, filters)
-        self.config = ctx.config
-        self.twitter = ctx.twitter
-        self.bsky = ctx.bsky
-        self.http = ctx.http
-        self.bot = ctx.bot
+class ContextualHandler(ABC, Handler):
+    def __init__(self, ctx: Context, filters: Filter | None = None):
+        super().__init__(self.callback, filters)  # type: ignore
+        self.ctx: Final = ctx
 
-    async def forward(self, bot: Client, *args):
+    async def callback(self, bot: Client, *args):
         try:
-            await self.args(*args)
-            await self.handle()
+            handler = self.inner(self.ctx, *args)
+            await handler.handle()
         except UserException as e:
-            await self.notify(str(e))
-        except Exception as e:
+            await handler.notify(str(e))
+        except Exception as e:  # noqa: BLE001
             logger.error(str(e))
             traceback.print_exc()
-            await self.notify('Internal Error')
+            await handler.notify('Internal Error')
 
-    async def args(self, *args, **kwargs): ...
+    @abstractmethod
+    def inner(self, ctx: Context, *args) -> ContextualHandlerInner: ...
+
+
+class ContextualHandlerInner(ABC):
+    def __init__(self, ctx: Context):
+        self.config: Final = ctx.config
+        self.twitter: Final = ctx.twitter
+        self.bsky: Final = ctx.bsky
+        self.http: Final = ctx.http
+        self.bot: Final = ctx.bot
+
+    @abstractmethod
     async def notify(self, text: str): ...
+
+    @abstractmethod
     async def handle(self): ...
 
     async def get_post(self, url: str):
@@ -54,19 +68,18 @@ class ContextualHandler(Handler):
         else:
             raise UserException('Unrecognized URL')
 
-    async def get_album(self, post: BskyPostEx | TweetEx):
+    async def get_album(self, post: BskyPostEx | TweetEx) -> list[InputMedia]:
         album = []
         for photo in post.photos():
             album.append(InputMediaPhoto(photo))
         for video in post.videos():
             album.append(InputMediaVideo(video))
         for gif in post.gifs():
-            album.append(InputMediaVideo(
-                gif, disable_content_type_detection=True))
+            album.append(InputMediaVideo(gif, disable_content_type_detection=True))
 
         return album
 
-    async def send_album(self, chat: Chat, post: BskyPostEx | TweetEx, album: list[InputMedia]):
+    async def send_album(self, chat: Chat, post: BskyPostEx | TweetEx, album: list):
         url = post.url()
         content = post.render()
 
@@ -79,7 +92,7 @@ class ContextualHandler(Handler):
 
         await message.edit_reply_markup(self.get_action_buttons())
 
-    def get_action_buttons(self, old: InlineKeyboardMarkup = None):
+    def get_action_buttons(self, old: InlineKeyboardMarkup | Any = None):
         if not isinstance(old, InlineKeyboardMarkup):
             actions = ['Silent', 'Forward']
         else:
@@ -96,7 +109,9 @@ class ContextualHandler(Handler):
                 if button.text in transitions
             ]
 
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton(action, callback_data=action)
+        buttons = [
+            InlineKeyboardButton(action, callback_data=action)  #
             for action in actions
-        ]])
+        ]
+
+        return InlineKeyboardMarkup([buttons])

@@ -9,4 +9,5 @@ async def start():
     async with Context():
         logger.info('Handling incoming messages (Ctrl+C to stop)')
         await idle()
+        print()
         logger.info('Stopping bot')
