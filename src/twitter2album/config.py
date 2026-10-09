@@ -1,6 +1,6 @@
 import tomllib
 from dataclasses import dataclass
-from typing import Self
+from typing import Literal, Self
 
 import serde
 
@@ -8,7 +8,9 @@ import serde
 @serde.serde
 @dataclass(frozen=True)
 class Log:
-    level: str = serde.field(default='DEBUG', deserializer=lambda x: x.upper())
+    type Level = Literal['TRACE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
+    level: Level = serde.field(default='DEBUG', deserializer=lambda x: x.upper())
 
 
 @serde.serde
@@ -17,14 +19,14 @@ class Telegram:
     api_id: int
     api_hash: str
     bot_token: str
-    chat_whitelist: list[int]
+    allow_chats: list[int]
 
 
 @serde.serde
 @dataclass(frozen=True)
 class Config:
-    log: Log
     telegram: Telegram
+    log: Log = serde.field(default_factory=Log)
 
     @classmethod
     def load(cls) -> Self:

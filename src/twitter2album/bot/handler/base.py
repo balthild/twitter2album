@@ -93,7 +93,7 @@ class ContextualResponder(ABC):
         return chat.id == self.user.forward
 
     def unknown(self, chat: Chat) -> bool:
-        return chat.id not in self.config.telegram.chat_whitelist
+        return chat.id not in self.config.telegram.allow_chats
 
     async def accounts(self) -> Sequence[Account]:
         accounts = []
