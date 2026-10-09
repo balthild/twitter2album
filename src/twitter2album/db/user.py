@@ -19,7 +19,8 @@ class BskyCredentials:
 
 @serde.serde
 class User(Model):
-    """A Telegram user's credentials and preferences.
+    """
+    A Telegram user's credentials and preferences.
 
     `_id` is the Telegram user id, so it survives the bot being used from more
     than one chat.

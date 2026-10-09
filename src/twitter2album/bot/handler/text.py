@@ -19,7 +19,14 @@ from pyrogram.types import (
 
 from twitter2album.bot.context import Context
 from twitter2album.const import C
-from twitter2album.db.state import AskingLoginHandle, AskingLoginPlatform, AskingLoginSecret, AskingLogoutAccount
+from twitter2album.db.state import (
+    AskingImportAccount,
+    AskingLoginHandle,
+    AskingLoginPlatform,
+    AskingLoginSecret,
+    AskingLogoutAccount,
+    Importing,
+)
 from twitter2album.db.user import BskyCredentials
 from twitter2album.error import StateException, UserException
 
@@ -71,6 +78,10 @@ class TextResponder(ContextualResponder):
             case '/forward':
                 return await self.handle_forward()
 
+            # import
+            case '/import':
+                return await self.handle_import()
+
             # unknown
             case str(command) if command.startswith('/'):
                 return await self.notify('Unknown command')
@@ -86,6 +97,9 @@ class TextResponder(ContextualResponder):
         if self.user.idle:
             await self.notify('Nothing to cancel')
             return
+
+        if isinstance(self.user.state, Importing):
+            await self.ctx.cache.discard(self.user.state.rid)
 
         self.user.state = None
         self.user.save()
@@ -166,6 +180,26 @@ class TextResponder(ContextualResponder):
             reply_markup=ReplyKeyboardMarkup([[*buttons]], resize_keyboard=True),
         )
 
+    async def handle_import(self):
+        await self.twitter.authenticate()
+
+        if isinstance(self.user.state, Importing):
+            await self.ctx.cache.discard(self.user.state.rid)
+
+        self.user.state = AskingImportAccount()
+        self.user.save()
+
+        handles = await self.twitter.handles()
+        buttons = [
+            InlineKeyboardButton(handle, callback_data=f'import:account:{handle}')  #
+            for handle in handles
+        ]
+
+        await self.message.reply(
+            'Which account to import bookmarks from?',
+            reply_markup=InlineKeyboardMarkup([[button] for button in buttons]),
+        )
+
     async def handle_state(self):
         match self.user.state:
             # login
@@ -187,6 +221,13 @@ class TextResponder(ContextualResponder):
             # logout
             case AskingLogoutAccount():
                 await self.notify('Pick an account with the buttons above, or /cancel')
+
+            # import
+            case AskingImportAccount():
+                await self.notify('Pick an account with the buttons above, or /cancel')
+
+            case Importing():
+                await self.notify('Import is in progress. Use the buttons, or /cancel')
 
     async def handle_login_handle(self, state: AskingLoginHandle):
         if state.platform not in C.platforms:
@@ -233,7 +274,7 @@ class TextResponder(ContextualResponder):
 
     async def handle_media(self, url: str, pick: Sequence[str] = ()):
         post = await self.get_post(url)
-        album = await self.get_album(post)
+        media = await self.get_media(post)
 
         subset = []
         for expr in pick:
@@ -247,13 +288,13 @@ class TextResponder(ContextualResponder):
             else:
                 raise UserException('Invalid picking expression. Example: 1 3-4')
 
-        count = len(album)
+        count = len(media)
         if subset:
-            album = [medium for i, medium in enumerate(album) if i + 1 in subset]
-            if not album:
+            media = [medium for i, medium in enumerate(media) if i + 1 in subset]
+            if not media:
                 raise UserException(f'None of the {count} media is picked')
 
-        await self.send_album(self.message.chat, post, album)
+        await self.send_album(self.message.chat, post, media, self.markup_single())
 
     async def drop_message(self):
         """

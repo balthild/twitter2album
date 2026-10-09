@@ -1,4 +1,5 @@
-"""Interaction state, held in the user's record as a single tagged value.
+"""
+Interaction state, held in the user's record as a single tagged value.
 
 `User.state` is exactly one of these, so an interaction in progress is one value
 instead of several fields that can contradict each other — there is no way to
@@ -25,6 +26,9 @@ type State = (
     | AskingLogoutAccount
     # forward
     | AskingForwardChat
+    # import
+    | AskingImportAccount
+    | Importing
 )
 
 
@@ -52,3 +56,14 @@ class AskingLogoutAccount:
 @serde.serde
 class AskingForwardChat:
     pass
+
+
+@serde.serde
+class AskingImportAccount:
+    pass
+
+
+@serde.serde
+class Importing:
+    rid: str
+    handle: str = ''

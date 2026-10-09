@@ -8,7 +8,8 @@ from polodb.core import Document, Filter
 
 @serde.serde
 class Model:
-    """Base class for documents stored in a polodb collection.
+    """
+    Base class for documents stored in a polodb collection.
 
     Subclasses must declare `COLLECTION` and give every field a default. On read,
     pyserde substitutes the default for any field absent from the document and

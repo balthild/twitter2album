@@ -4,6 +4,7 @@ from typing import Final, Self
 from aiohttp import ClientSession
 from loguru import logger
 
+from twitter2album.bot.cache import GeneratorCache
 from twitter2album.bot.client import BotClient
 from twitter2album.config import Config
 from twitter2album.db.store import Store
@@ -15,6 +16,7 @@ class Context:
         self.store: Final = Store()
         self.http: Final = ClientSession()
         self.bot: Final = BotClient(config)
+        self.cache: Final = GeneratorCache()
 
         # import here to avoid circular import error
         from twitter2album.bot.handler import ButtonHandler, ShareHandler, TextHandler

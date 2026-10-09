@@ -16,9 +16,9 @@ from pyrogram.types import (
     Chat,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InputMedia,
     InputMediaPhoto,
     InputMediaVideo,
+    Message,
 )
 
 from twitter2album.api import AbstractPost, BskyClient, TwitterClient
@@ -117,31 +117,44 @@ class ContextualResponder(ABC):
         else:
             raise UserException('Unrecognized URL')
 
-    async def get_album(self, post: AbstractPost) -> list[InputMedia]:
-        album = []
+    async def get_media(self, post: AbstractPost) -> list[InputMediaPhoto | InputMediaVideo]:
+        media = []
         for photo in post.photos():
-            album.append(InputMediaPhoto(photo))
+            media.append(InputMediaPhoto(photo))
         for video in post.videos():
-            album.append(InputMediaVideo(video))
+            media.append(InputMediaVideo(video))
         for gif in post.gifs():
-            album.append(InputMediaVideo(gif, disable_content_type_detection=True))
+            media.append(InputMediaVideo(gif, disable_content_type_detection=True))
 
-        return album
+        return media
 
-    async def send_album(self, chat: Chat, post: AbstractPost, album: list):
+    async def send_album(
+        self,
+        chat: Chat,
+        post: AbstractPost,
+        media: list[InputMediaPhoto | InputMediaVideo],
+        markup: InlineKeyboardMarkup | None,
+    ) -> list[Message]:
         url = post.url()
         content = post.render()
 
         source = f'<a href="{url}">source</a>'
         sep = '\n' if '\n' in content else ' '
-        album[0].caption = f'{content}{sep}{source}'.strip()
-        album[0].parse_mode = ParseMode.HTML
+        media[0].caption = f'{content}{sep}{source}'.strip()
+        media[0].parse_mode = ParseMode.HTML
 
-        [message] = await self.bot.send_media_group(chat.id, album)
+        album = await self.bot.send_media_group(chat.id, [*media])
 
-        await message.edit_reply_markup(self.get_action_buttons())
+        if markup is not None:
+            if len(album) == 1:
+                await album[0].edit_reply_markup(markup)
+            else:
+                reply = await album[0].reply(f'album={album[0].id}', quote=True)
+                await reply.edit_reply_markup(markup)
 
-    def get_action_buttons(self, old: InlineKeyboardMarkup | Any = None):
+        return album
+
+    def markup_single(self, old: InlineKeyboardMarkup | Any = None):
         if not isinstance(old, InlineKeyboardMarkup):
             actions = ['Silent', 'Forward']
         else:
@@ -164,3 +177,28 @@ class ContextualResponder(ABC):
         ]
 
         return InlineKeyboardMarkup([buttons])
+
+    def markup_import(self) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton('Silent', callback_data='import:silent'),
+                InlineKeyboardButton('Caption', callback_data='import:caption'),
+            ],
+            [
+                InlineKeyboardButton('Skip', callback_data='import:skip'),
+                InlineKeyboardButton('Unbookmark', callback_data='import:unbookmark'),
+            ],
+            [
+                InlineKeyboardButton('Forward & Unbookmark', callback_data='import:commit'),
+            ],
+        ])
+
+    def html_caption(self, post: AbstractPost) -> str:
+        source = self.html_source(post.url())
+        content = post.render()
+        sep = '\n' if '\n' in content else ' '
+
+        return f'{content}{sep}{source}'.strip()
+
+    def html_source(self, url: str) -> str:
+        return f'<a href="{url}">source</a>'
