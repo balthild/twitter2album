@@ -178,18 +178,18 @@ class ContextualResponder(ABC):
 
         return InlineKeyboardMarkup([buttons])
 
-    def markup_import(self) -> InlineKeyboardMarkup:
+    def markup_import(self, rid: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton('Silent', callback_data='import:silent'),
-                InlineKeyboardButton('Caption', callback_data='import:caption'),
+                InlineKeyboardButton('Silent', callback_data=f'import:silent:{rid}'),
+                InlineKeyboardButton('Caption', callback_data=f'import:caption:{rid}'),
             ],
             [
-                InlineKeyboardButton('Skip', callback_data='import:skip'),
-                InlineKeyboardButton('Unbookmark', callback_data='import:unbookmark'),
+                InlineKeyboardButton('Skip', callback_data=f'import:skip:{rid}'),
+                InlineKeyboardButton('Unbookmark', callback_data=f'import:unbookmark:{rid}'),
             ],
             [
-                InlineKeyboardButton('Forward & Unbookmark', callback_data='import:commit'),
+                InlineKeyboardButton('Forward & Unbookmark', callback_data=f'import:commit:{rid}'),
             ],
         ])
 

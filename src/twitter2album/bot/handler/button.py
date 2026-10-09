@@ -183,7 +183,7 @@ class ButtonResponder(ContextualResponder):
         await self.message.edit_caption(
             self.html_source(url),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_import(),
+            reply_markup=self.markup_import(state.rid),
         )
         await self.query.answer()
 
@@ -194,7 +194,7 @@ class ButtonResponder(ContextualResponder):
         await self.message.edit_caption(
             self.html_caption(post),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_import(),
+            reply_markup=self.markup_import(state.rid),
         )
         await self.query.answer()
 
@@ -292,7 +292,7 @@ class ButtonResponder(ContextualResponder):
             if not media:
                 continue
 
-            await self.send_album(chat, post, media, self.markup_import())
+            await self.send_album(chat, post, media, self.markup_import(rid))
             return
 
     async def get_album(self, message: Message) -> list[Message]:
