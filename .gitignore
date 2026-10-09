@@ -3,3 +3,4 @@ config.toml
 accounts.db
 *.session
 *.session-*
+data/

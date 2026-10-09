@@ -1,27 +1,59 @@
+from __future__ import annotations
+
 import re
-from typing import Final, Self
+from typing import Final
 from urllib.parse import ParseResult as URL
+from urllib.parse import urlparse
 
 from loguru import logger
 from twscrape import API, Tweet
 
-from twitter2album.config import Config
+from twitter2album.const import C
 from twitter2album.error import UserException
+
+from .post import AbstractPost
 
 
 class TwitterClient(API):
-    def __init__(self, config: Config):
-        super().__init__()
-        self.config: Final = config.twitter
+    """A twscrape client whose account pool belongs to a single Telegram user.
+
+    twscrape picks whichever account is free from its pool and offers no way to pin
+    a request to one account, so isolating users means giving each their own pool.
+    The pool is also this user's only account store; nothing is kept in the database.
+    """
+
+    def __init__(self, user_id: int):
+        path = C.dirs.twscrape / f'{user_id}'
+        path.mkdir(parents=True, exist_ok=True)
+        super().__init__(pool=str(path / 'pool.db'))
+
+        self.user_id: Final = user_id
+        self.authenticated = False
 
     async def authenticate(self):
-        if not self.config.cookies:
-            raise UserException('Twitter cookies are not configured')
+        if self.authenticated:
+            return
 
-        logger.info('Authenticating Twitter with configured cookies')
-        await self.pool.add_account_cookies(self.config.username, self.config.cookies)
+        if not await self.handles():
+            raise UserException('Twitter is not logged in. Use /login to add an account')
 
-    async def get_tweet_ex(self, url: URL):
+        self.authenticated = True
+
+    async def login(self, handle: str, *, cookies: str):
+        logger.info('Adding Twitter account {}', handle)
+        try:
+            await self.pool.add_account_cookies(handle, cookies)
+        except ValueError as e:
+            raise UserException(f'Invalid Twitter cookies: {e}')
+
+    async def logout(self, handle: str):
+        logger.info('Removing Twitter account {}', handle)
+        await self.pool.delete_accounts(handle)
+
+    async def handles(self) -> list[str]:
+        return [account.username for account in await self.pool.get_all()]
+
+    async def get_tweet_ex(self, url: URL) -> TweetEx:
         match url.path.split('/'):
             case ['', _, 'status', twid, *_]:
                 twid = int(twid)
@@ -37,21 +69,15 @@ class TwitterClient(API):
 
         return TweetEx(tweet)
 
-    async def __aenter__(self) -> Self:
-        await self.authenticate()
-        return self
 
-    async def __aexit__(self, *args):
-        pass
-
-
-class TweetEx:
+class TweetEx(AbstractPost):
     def __init__(self, inner: Tweet) -> None:
         self.inner: Final = inner
 
     def url(self):
-        url = self.inner.url
-        return url.replace('https://x.com/', 'https://twitter.com/')
+        parsed = urlparse(self.inner.url)
+        parsed = parsed._replace(netloc='twitter.com')
+        return parsed.geturl()
 
     def render(self):
         content = self.inner.rawContent
@@ -80,7 +106,7 @@ class TweetEx:
                     candidate = variant
 
             if candidate is None:
-                formats = [x.contentType for x in video.variants]
+                formats = [f'`{x.contentType}`' for x in video.variants]
                 formats = ', '.join(set(formats))
                 raise UserException(f'Unrecognized video formats: {formats}')
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import traceback
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
+from functools import cached_property
 from typing import Any, Final
 from urllib.parse import urlparse
 
@@ -19,39 +21,67 @@ from pyrogram.types import (
     InputMediaVideo,
 )
 
+from twitter2album.api import AbstractPost, BskyClient, TwitterClient
 from twitter2album.bot.context import Context
-from twitter2album.bsky import BskyPostEx
-from twitter2album.error import UserException
-from twitter2album.twitter import TweetEx
+from twitter2album.bot.types import Account
+from twitter2album.const import C
+from twitter2album.db.user import User
+from twitter2album.error import AbortException, StateException, UserException
 
 
 class ContextualHandler(ABC, Handler):
+    """
+    A handler that handles all messages along the whole lifetime of the bot.
+    """
+
     def __init__(self, ctx: Context, filters: Filter | None = None):
-        super().__init__(self.callback, filters)  # type: ignore
+        super().__init__(self.handle, filters=filters)  # type: ignore
         self.ctx: Final = ctx
 
-    async def callback(self, bot: Client, *args):
+    async def handle(self, bot: Client, *args):
         try:
-            handler = self.inner(self.ctx, *args)
-            await handler.handle()
+            responder = self.responder(self.ctx, *args)
+            await responder.handle()
+        except AbortException:
+            return
+        except StateException as e:
+            responder.user.state = None
+            responder.user.save()
+            await responder.notify(str(e))
         except UserException as e:
-            await handler.notify(str(e))
+            await responder.notify(str(e))
         except Exception as e:  # noqa: BLE001
             logger.error(str(e))
             traceback.print_exc()
-            await handler.notify('Internal Error')
+            await responder.notify('Internal Error')
 
     @abstractmethod
-    def inner(self, ctx: Context, *args) -> ContextualHandlerInner: ...
+    def responder(self, ctx: Context, *args) -> ContextualResponder: ...
 
 
-class ContextualHandlerInner(ABC):
-    def __init__(self, ctx: Context):
+class ContextualResponder(ABC):
+    """
+    A handler for a specific incoming message.
+    """
+
+    def __init__(self, ctx: Context, sender: int):
+        self.ctx: Final = ctx
         self.config: Final = ctx.config
-        self.twitter: Final = ctx.twitter
-        self.bsky: Final = ctx.bsky
         self.http: Final = ctx.http
         self.bot: Final = ctx.bot
+        self.sender: Final = sender
+
+    @cached_property
+    def user(self) -> User:
+        return User.resolve(self.sender)
+
+    @cached_property
+    def twitter(self) -> TwitterClient:
+        return TwitterClient(self.user._id)
+
+    @cached_property
+    def bsky(self) -> BskyClient:
+        return BskyClient(self.user._id)
 
     @abstractmethod
     async def notify(self, text: str): ...
@@ -59,16 +89,35 @@ class ContextualHandlerInner(ABC):
     @abstractmethod
     async def handle(self): ...
 
-    async def get_post(self, url: str):
+    def skipped(self, chat: Chat) -> bool:
+        return chat.id == self.user.forward
+
+    def unknown(self, chat: Chat) -> bool:
+        return chat.id not in self.config.telegram.chat_whitelist
+
+    async def accounts(self) -> Sequence[Account]:
+        accounts = []
+
+        for handle in await self.twitter.handles():
+            accounts.append(Account('twitter', handle, handle))
+
+        for did, credentials in self.user.bsky.items():
+            accounts.append(Account('bsky', credentials.handle, did))
+
+        return accounts
+
+    async def get_post(self, url: str) -> AbstractPost:
         parsed = urlparse(url)
-        if parsed.netloc in self.config.domains.twitter:
+        if parsed.netloc in C.domains.twitter:
+            await self.twitter.authenticate()
             return await self.twitter.get_tweet_ex(parsed)
-        elif parsed.netloc in self.config.domains.bsky:
+        elif parsed.netloc in C.domains.bsky:
+            await self.bsky.authenticate()
             return await self.bsky.get_post_ex(parsed)
         else:
             raise UserException('Unrecognized URL')
 
-    async def get_album(self, post: BskyPostEx | TweetEx) -> list[InputMedia]:
+    async def get_album(self, post: AbstractPost) -> list[InputMedia]:
         album = []
         for photo in post.photos():
             album.append(InputMediaPhoto(photo))
@@ -79,7 +128,7 @@ class ContextualHandlerInner(ABC):
 
         return album
 
-    async def send_album(self, chat: Chat, post: BskyPostEx | TweetEx, album: list):
+    async def send_album(self, chat: Chat, post: AbstractPost, album: list):
         url = post.url()
         content = post.render()
 

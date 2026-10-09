@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build>=0.12.3,<0.13"]
+requires = ["uv_build ~= 0.12.0"]
 build-backend = "uv_build"
 
 [project]
@@ -7,13 +7,14 @@ name = "twitter2album"
 version = "2024.04.17"
 requires-python = "~= 3.12.0"
 dependencies = [
-    "tomli",
+    "uvloop",
+    "aiohttp",
+    "pyserde",
+    "polodb-python",
+    "prettyprinter",
     "atproto",
     "twscrape[curl]",
     "pyrotgfork[fast]",
-    "uvloop",
-    "aiohttp",
-    "prettyprinter",
 ]
 
 [project.scripts]
@@ -34,4 +35,5 @@ line-length = 120
 ignore = ["PLR2044"]
 
 [tool.ruff.format]
+preview = true
 quote-style = "single"

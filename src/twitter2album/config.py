@@ -1,56 +1,32 @@
+import tomllib
 from dataclasses import dataclass
 from typing import Self
 
-import tomli
-
-from twitter2album.dataclass import DataclassExt
+import serde
 
 
+@serde.serde
 @dataclass(frozen=True)
-class Telegram(DataclassExt):
-    api_id: str
+class Log:
+    level: str = serde.field(default='DEBUG', deserializer=lambda x: x.upper())
+
+
+@serde.serde
+@dataclass(frozen=True)
+class Telegram:
+    api_id: int
     api_hash: str
     bot_token: str
     chat_whitelist: list[int]
-    forward_to: int
 
 
+@serde.serde
 @dataclass(frozen=True)
-class Twitter(DataclassExt):
-    username: str
-    cookies: str
-
-
-@dataclass(frozen=True)
-class Bsky(DataclassExt):
-    username: str
-    password: str
-
-
-@dataclass(frozen=True)
-class Domains(DataclassExt):
-    twitter = (
-        'twitter.com',
-        'x.com',
-        'fixvx.com',
-        'fixupx.com',
-        'vxtwitter.com',
-        'fxtwitter.com',
-    )
-
-    bsky = ('bsky.app',)
-
-
-@dataclass(frozen=True)
-class Config(DataclassExt):
+class Config:
+    log: Log
     telegram: Telegram
-    twitter: Twitter
-    bsky: Bsky
-
-    domains = Domains()
 
     @classmethod
     def load(cls) -> Self:
         with open('./config.toml', 'rb') as f:
-            values = tomli.load(f)
-            return cls.deserialize(values)
+            return serde.from_dict(cls, tomllib.load(f))

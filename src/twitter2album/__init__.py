@@ -2,9 +2,15 @@ import os
 
 import uvloop
 
-import twitter2album.bot
+from .config import Config
 
 
 def main():
-    os.environ.setdefault('TWS_HTTP_BACKEND', 'curl')
-    uvloop.run(twitter2album.bot.start())
+    config = Config.load()
+
+    os.environ['TWS_HTTP_BACKEND'] = 'curl'
+    os.environ['LOGURU_LEVEL'] = config.log.level
+
+    from . import bot
+
+    uvloop.run(bot.start(config))
