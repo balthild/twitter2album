@@ -238,7 +238,11 @@ class TextResponder(ContextualResponder):
 
         match state.platform:
             case 'twitter':
-                message = 'Send your Twitter cookies, like `auth_token=...; ct0=...`'
+                message = (
+                    'Send your Twitter cookies, like `auth_token=...; ct0=...`\n'
+                    'You can obtain it with [unjar](https://github.com/vladkens/unjar)\n'
+                    'Example: `unjar -b brave -f header x.com`'
+                )
             case 'bsky':
                 message = 'Send your Bluesky password'
             case _:
