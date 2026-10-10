@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import traceback
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from functools import cached_property
 from typing import Any, Final
 from urllib.parse import urlparse
@@ -16,6 +16,7 @@ from pyrogram.types import (
     Chat,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaAnimation,
     InputMediaPhoto,
     InputMediaVideo,
     Message,
@@ -27,6 +28,9 @@ from twitter2album.bot.types import Account
 from twitter2album.const import C
 from twitter2album.db.user import User
 from twitter2album.error import AbortException, StateException, UserException
+
+type InputMediaAllowed = InputMediaPhoto | InputMediaVideo | InputMediaAnimation
+type InputMediaMapped = InputMediaPhoto | InputMediaVideo
 
 
 class ContextualHandler(ABC, Handler):
@@ -117,42 +121,83 @@ class ContextualResponder(ABC):
         else:
             raise UserException('Unrecognized URL')
 
-    async def get_media(self, post: AbstractPost) -> list[InputMediaPhoto | InputMediaVideo]:
+    async def get_media(self, post: AbstractPost) -> list[InputMediaAllowed]:
         media = []
         for photo in post.photos():
             media.append(InputMediaPhoto(photo))
         for video in post.videos():
             media.append(InputMediaVideo(video))
         for gif in post.gifs():
-            media.append(InputMediaVideo(gif, disable_content_type_detection=True))
+            media.append(InputMediaAnimation(gif))
 
         return media
+
+    def map_media(self, media: list[InputMediaAllowed]) -> Iterator[InputMediaMapped]:
+        for item in media:
+            if isinstance(item, InputMediaAnimation):
+                yield InputMediaVideo(item.media, disable_content_type_detection=True)
+            else:
+                yield item
 
     async def send_album(
         self,
         chat: Chat,
         post: AbstractPost,
-        media: list[InputMediaPhoto | InputMediaVideo],
-        markup: InlineKeyboardMarkup | None,
+        media: list[InputMediaAllowed],
+        markup: InlineKeyboardMarkup = None,  # type: ignore
     ) -> list[Message]:
-        url = post.url()
-        content = post.render()
+        match media:
+            case [InputMediaPhoto() as photo]:
+                message = await self.bot.send_photo(
+                    chat.id,
+                    photo,
+                    reply_markup=markup,
+                    caption=self.html_caption(post),
+                    parse_mode=ParseMode.HTML,
+                )
 
-        source = f'<a href="{url}">source</a>'
-        sep = '\n' if '\n' in content else ' '
-        media[0].caption = f'{content}{sep}{source}'.strip()
-        media[0].parse_mode = ParseMode.HTML
+                if message is None:
+                    raise UserException('Failed to send media')
+                return [message]
 
-        album = await self.bot.send_media_group(chat.id, [*media])
+            case [InputMediaVideo() as video]:
+                message = await self.bot.send_video(
+                    chat.id,
+                    video.media,
+                    reply_markup=markup,
+                    caption=self.html_caption(post),
+                    parse_mode=ParseMode.HTML,
+                )
 
-        if markup is not None:
-            if len(album) == 1:
-                await album[0].edit_reply_markup(markup)
-            else:
+                if message is None:
+                    raise UserException('Failed to send media')
+                return [message]
+
+            case [InputMediaAnimation() as gif]:
+                message = await self.bot.send_animation(
+                    chat.id,
+                    gif.media,
+                    reply_markup=markup,
+                    caption=self.html_caption(post),
+                    parse_mode=ParseMode.HTML,
+                )
+
+                if message is None:
+                    raise UserException('Failed to send media')
+                return [message]
+
+            case [*media]:
+                media[0].caption = self.html_caption(post)
+                media[0].parse_mode = ParseMode.HTML
+
+                album = await self.bot.send_media_group(chat.id, [*self.map_media(media)])
+
                 reply = await album[0].reply(f'album={album[0].id}', quote=True)
                 await reply.edit_reply_markup(markup)
 
-        return album
+                if not album:
+                    raise UserException('Failed to media group')
+                return album
 
     def markup_single(self, old: InlineKeyboardMarkup | Any = None):
         if not isinstance(old, InlineKeyboardMarkup):
