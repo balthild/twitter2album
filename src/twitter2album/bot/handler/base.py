@@ -114,15 +114,19 @@ class ContextualResponder(ABC):
         return accounts
 
     async def get_post(self, url: str) -> AbstractPost:
-        parsed = urlparse(url)
-        if parsed.netloc in C.domains.twitter:
-            await self.twitter.authenticate()
-            return await self.twitter.get_tweet_ex(parsed)
-        elif parsed.netloc in C.domains.bsky:
-            await self.bsky.authenticate()
-            return await self.bsky.get_post_ex(parsed)
-        else:
-            raise UserException('Unrecognized URL')
+        @self.ctx.cache.disk.memoize_async(name='t2a:web:post')
+        async def fetch(url: str) -> AbstractPost:
+            parsed = urlparse(url)
+            if parsed.netloc in C.domains.twitter:
+                await self.twitter.authenticate()
+                return await self.twitter.get_tweet_ex(parsed)
+            elif parsed.netloc in C.domains.bsky:
+                await self.bsky.authenticate()
+                return await self.bsky.get_post_ex(parsed)
+            else:
+                raise UserException('Unrecognized URL')
+
+        return await fetch(url)
 
     async def get_media(self, post: AbstractPost) -> list[InputMediaAllowed]:
         media = []
@@ -143,7 +147,7 @@ class ContextualResponder(ABC):
                 yield item
 
     async def fetch_images(self, post: AbstractPost) -> AsyncIterator[Image]:
-        @self.ctx.cache.disk.memoize_async(name='t2a:media:fetch')
+        @self.ctx.cache.disk.memoize_async(name='t2a:web:media')
         async def fetch(url: str) -> bytes:
             response = await self.http.get(url)
             if response.status // 100 != 2:
