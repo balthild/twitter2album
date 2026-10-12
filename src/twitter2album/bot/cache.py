@@ -33,10 +33,10 @@ class GeneratorCache:
     def __init__(self, size: int = 32):
         self.inner: Final = LRU(size, self.on_evict)
 
-    def get(self, rid: str) -> AsyncGenerator[Any, None] | None:
+    def get(self, rid: str) -> AsyncGenerator[Any] | None:
         return self.inner.get(rid)
 
-    def put(self, rid: str, gen: AsyncGenerator[Any, None]):
+    def put(self, rid: str, gen: AsyncGenerator[Any]):
         self.inner[rid] = gen
 
     async def discard(self, rid: str):
@@ -44,7 +44,7 @@ class GeneratorCache:
         if gen is not None:
             await gen.aclose()
 
-    def on_evict(self, rid: str, gen: AsyncGenerator[Any, None]):
+    def on_evict(self, rid: str, gen: AsyncGenerator[Any]):
         # lru-dict calls this synchronously from `__setitem__`, so the close is handed
         # to the event loop instead of run inline.
         asyncio.create_task(gen.aclose())

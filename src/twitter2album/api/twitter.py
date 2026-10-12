@@ -85,7 +85,7 @@ class TwitterClient(API):
 
         return TweetEx(tweet)
 
-    async def bookmarks_of(self, handle: str, limit: int = -1) -> AsyncGenerator[Tweet, None]:
+    async def bookmarks_of(self, handle: str, limit: int = -1) -> AsyncGenerator[Tweet]:
         api = await self._isolated(handle)
 
         try:
