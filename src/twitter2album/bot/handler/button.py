@@ -230,13 +230,13 @@ class ButtonResponder(ContextualResponder):
         album = await self.get_album(self.message)
 
         await self.bot.forward_messages(target, chat.id, [message.id for message in album])
+        self.mark_skipped(url)
 
         try:
             await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(url))
         except UserException:
             await self.query.answer('Forwarded, but failed to unbookmark', show_alert=True)
         else:
-            self.unmark_skipped(url)
             await self.query.answer('Forwarded and unbookmarked')
             await self.remove_buttons()
             await self.import_advance(chat, state.rid, state.handle)
