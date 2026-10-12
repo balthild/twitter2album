@@ -75,7 +75,7 @@ class ButtonResponder(ContextualResponder):
         await self.message.edit_caption(
             self.html_source(url),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_single(self.message.reply_markup),
+            reply_markup=self.markup_manual(self.message.reply_markup),
         )
         await self.query.answer('Caption silenced')
 
@@ -86,7 +86,7 @@ class ButtonResponder(ContextualResponder):
         await self.message.edit_caption(
             self.html_caption(post),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_single(self.message.reply_markup),
+            reply_markup=self.markup_manual(self.message.reply_markup),
         )
         await self.query.answer('Caption rendered')
 
@@ -167,7 +167,7 @@ class ButtonResponder(ContextualResponder):
             raise StateException('/import')
 
         rid = uuid4().hex
-        self.ctx.cache.put(rid, self.twitter.bookmarks_of(handle))
+        self.ctx.cache.gen.put(rid, self.twitter.bookmarks_of(handle))
 
         self.user.state = Importing(handle=handle, rid=rid)
         self.user.save()
@@ -261,16 +261,16 @@ class ButtonResponder(ContextualResponder):
         Send the next bookmark worth showing, passing over the rest.
         """
 
-        generator = self.ctx.cache.get(rid)
+        generator = self.ctx.cache.gen.get(rid)
         if generator is None:
             generator = self.twitter.bookmarks_of(handle)
-            self.ctx.cache.put(rid, generator)
+            self.ctx.cache.gen.put(rid, generator)
 
         while True:
             try:
                 tweet = await anext(generator)
             except StopAsyncIteration:
-                await self.ctx.cache.discard(rid)
+                await self.ctx.cache.gen.discard(rid)
                 self.user.reset_state()
                 self.user.save()
                 await self.bot.send_message(chat.id, 'No more bookmarks')

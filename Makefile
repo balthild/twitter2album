@@ -1,12 +1,14 @@
-export TWS_HTTP_BACKEND = curl
+.PHONY: help
+help:
+	@echo 'Usage: make [run|lint|fmt]'
 
 .PHONY: run
 run:
 	uv run twitter2album-bot
 
-.PHONY: dev
-dev:
-	uv run watchexec --restart --watch src --exts py twitter2album-bot
+.PHONY: lint
+lint:
+	uvx ruff check
 
 .PHONY: fmt
 fmt:

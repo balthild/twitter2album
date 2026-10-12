@@ -9,6 +9,7 @@ class Dirs:
     polodb: Final = base / 'polodb'
     pyrogram: Final = base / 'pyrogram'
     twscrape: Final = base / 'twscrape'
+    cache: Final = base / 'cache'
 
 
 class Domains:

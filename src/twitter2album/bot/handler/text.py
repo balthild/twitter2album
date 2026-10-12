@@ -91,7 +91,7 @@ class TextResponder(ContextualResponder):
 
         match parts:
             case [url, *pick]:
-                return await self.handle_media(url, pick)
+                return await self.handle_url(url, pick)
 
     async def handle_cancel(self):
         if self.user.idle:
@@ -99,7 +99,7 @@ class TextResponder(ContextualResponder):
             return
 
         if isinstance(self.user.state, Importing):
-            await self.ctx.cache.discard(self.user.state.rid)
+            await self.ctx.cache.gen.discard(self.user.state.rid)
 
         self.user.state = None
         self.user.save()
@@ -184,7 +184,7 @@ class TextResponder(ContextualResponder):
         await self.twitter.authenticate()
 
         if isinstance(self.user.state, Importing):
-            await self.ctx.cache.discard(self.user.state.rid)
+            await self.ctx.cache.gen.discard(self.user.state.rid)
 
         self.user.state = AskingImportAccount()
         self.user.save()
@@ -276,7 +276,7 @@ class TextResponder(ContextualResponder):
             f'Logged in to {C.platforms[state.platform]} as {state.handle}',
         )
 
-    async def handle_media(self, url: str, pick: Sequence[str] = ()):
+    async def handle_url(self, url: str, pick: Sequence[str] = ()):
         post = await self.get_post(url)
         media = await self.get_media(post)
 
@@ -298,7 +298,7 @@ class TextResponder(ContextualResponder):
             if not media:
                 raise UserException(f'None of the {count} media is picked')
 
-        await self.send_album(self.message.chat, post, media, self.markup_single())
+        await self.send_album(self.message.chat, post, media, self.markup_manual())
 
     async def drop_message(self):
         """

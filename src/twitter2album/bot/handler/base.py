@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import traceback
 from abc import ABC, abstractmethod
-from collections.abc import Iterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from functools import cached_property
 from typing import Any, Final
 from urllib.parse import urlparse
 
 from loguru import logger
+from PIL import UnidentifiedImageError
+from PIL.Image import Image
+from PIL.Image import open as open_image
 from pyrogram import Client
 from pyrogram.enums import ParseMode
 from pyrogram.filters import Filter
@@ -139,6 +142,20 @@ class ContextualResponder(ABC):
             else:
                 yield item
 
+    async def fetch_images(self, post: AbstractPost) -> AsyncIterator[Image]:
+        @self.ctx.cache.disk.memoize_async(name='t2a:media:fetch')
+        async def fetch(url: str) -> bytes:
+            response = await self.http.get(url)
+            if response.status // 100 != 2:
+                raise UserException(f'{response.status} {response.reason} while fetching {url}')
+            return await response.read()
+
+        for url in post.photos():
+            try:
+                yield open_image(await fetch(url))
+            except UnidentifiedImageError:
+                raise UserException(f'Failed to decode image data from {url}')
+
     async def send_album(
         self,
         chat: Chat,
@@ -196,10 +213,10 @@ class ContextualResponder(ABC):
                 await reply.edit_reply_markup(markup)
 
                 if not album:
-                    raise UserException('Failed to media group')
+                    raise UserException('Failed to send media')
                 return album
 
-    def markup_single(self, old: InlineKeyboardMarkup | Any = None):
+    def markup_manual(self, old: InlineKeyboardMarkup | Any = None):
         if not isinstance(old, InlineKeyboardMarkup):
             actions = ['Silent', 'Forward']
         else:
