@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Mapping
 from inspect import currentframe, getframeinfo
 from types import EllipsisType, NoneType
@@ -13,10 +14,12 @@ from prettyprinter.prettyprinter import (
 )
 
 
-def dbg(value, depth=2):
-    caller = getframeinfo(currentframe().f_back)  # type: ignore
-    print(f'{caller.filename}:{caller.lineno}')
-    cpprint(DebugWrapper(value), depth=depth)
+def dbg(value, depth=2, position=False):
+    if position:
+        caller = getframeinfo(currentframe().f_back)  # type: ignore
+        print(f'{caller.filename}:{caller.lineno}', file=sys.stderr)
+
+    cpprint(DebugWrapper(value), depth=depth, stream=sys.stderr)
 
     return value
 

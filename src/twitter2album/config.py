@@ -10,7 +10,7 @@ import serde
 class Log:
     type Level = Literal['TRACE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
-    level: Level = serde.field(default='DEBUG', deserializer=lambda x: x.upper())
+    level: Level = serde.field(default='INFO', deserializer=lambda x: x.upper())
 
 
 @serde.serde

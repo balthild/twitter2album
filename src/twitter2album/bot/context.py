@@ -1,4 +1,3 @@
-import sys
 from typing import Final, Self
 
 from aiohttp import ClientSession
@@ -25,10 +24,6 @@ class Context:
         self.bot.add_handler(ButtonHandler(self))
         self.bot.add_handler(ShareHandler(self))
 
-        # twscrape overrides log level in side effects
-        logger.remove()
-        logger.add(sys.stderr, level=config.log.level)
-
         if config.log.level == 'TRACE':
             logger.trace('TRACE mode enabled. Unhandled raw updates will be printed')
             self.bot.on_raw_update()(self.trace)
@@ -48,4 +43,4 @@ class Context:
         from twitter2album.utils import dbg
 
         logger.trace('Unhandled update received')
-        dbg(update, depth=12)
+        dbg(update, depth=12, position=False)

@@ -4,7 +4,7 @@ import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterator, Sequence
 from functools import cached_property
-from typing import Any, Final
+from typing import Final
 from urllib.parse import urlparse
 
 from loguru import logger
