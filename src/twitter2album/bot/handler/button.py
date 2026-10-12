@@ -6,7 +6,7 @@ from loguru import logger
 from pyrogram.enums import MessageEntityType, ParseMode
 from pyrogram.errors.rpc_error import RPCError
 from pyrogram.handlers import CallbackQueryHandler
-from pyrogram.types import CallbackQuery, Chat, Message
+from pyrogram.types import CallbackQuery, Chat, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from twitter2album.api import TweetEx, parse_tweet_id
 from twitter2album.bot.context import Context
@@ -60,47 +60,55 @@ class ButtonResponder(ContextualResponder):
             return
 
         match self.query.data:
-            case 'Silent':
-                await self.handle_silent()
-            case 'Caption':
-                await self.handle_caption()
-            case 'Forward' | 'Forwarded':
-                await self.handle_forward()
+            case 'noop':
+                await self.query.answer()
+
+            case 'manual:silent':
+                await self.handle_manual_silent()
+            case 'manual:caption':
+                await self.handle_manual_caption()
+            case 'manual:forward':
+                await self.handle_manual_forward()
+
             case str(data):
                 await self.handle_state(data)
 
-    async def handle_silent(self):
+    async def handle_manual_silent(self):
         url = self.extract_source_url()
 
         await self.message.edit_caption(
             self.html_source(url),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_manual(self.message.reply_markup),
+            reply_markup=self.markup_manual(),
         )
         await self.query.answer('Caption silenced')
 
-    async def handle_caption(self):
+    async def handle_manual_caption(self):
         url = self.extract_source_url()
         post = await self.get_post(url)
 
         await self.message.edit_caption(
             self.html_caption(post),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_manual(self.message.reply_markup),
+            reply_markup=self.markup_manual(),
         )
         await self.query.answer('Caption rendered')
 
-    async def handle_forward(self):
+    async def handle_manual_forward(self):
         target = self.user.forward
         if target is None:
             await self.query.answer()
             raise UserException('No forward target set. Use /forward to choose one')
 
+        url = self.extract_source_url()
         chat = self.message.chat
         album = await self.get_album(self.message)
 
         await self.bot.forward_messages(target, chat.id, [message.id for message in album])
+        self.mark_skipped(url)
+
         await self.query.answer('Forwarded')
+        await self.remove_buttons('Forwarded')
 
     async def handle_state(self, data: str):
         match self.user.state:
@@ -199,13 +207,13 @@ class ButtonResponder(ContextualResponder):
         await self.query.answer()
 
     async def handle_import_skip(self, state: Importing):
-        chat = self.message.chat
+        url = self.extract_source_url()
 
-        self.mark_skipped(self.extract_source_url())
+        self.mark_skipped(url)
 
         await self.query.answer('Skipped')
-        await self.remove_buttons()
-        await self.import_advance(chat, state.rid, state.handle)
+        await self.remove_buttons('Skipped')
+        await self.import_advance(self.message.chat, state.rid, state.handle)
 
     async def handle_import_unbookmark(self, state: Importing):
         url = self.extract_source_url()
@@ -238,7 +246,7 @@ class ButtonResponder(ContextualResponder):
             await self.query.answer('Forwarded, but failed to unbookmark', show_alert=True)
         else:
             await self.query.answer('Forwarded and unbookmarked')
-            await self.remove_buttons()
+            await self.remove_buttons('Forwarded & Unbookmarked')
             await self.import_advance(chat, state.rid, state.handle)
 
     async def handle_import_leftover(self):
@@ -308,10 +316,15 @@ class ButtonResponder(ContextualResponder):
         except ValueError:
             return [message]
 
-    async def remove_buttons(self):
+    async def remove_buttons(self, reason: str | None = None):
         message = self.query.message
+
         try:
-            await message.edit_reply_markup()
+            if reason:
+                button = InlineKeyboardButton(reason, callback_data='noop')
+                await message.edit_reply_markup(reply_markup=InlineKeyboardMarkup([[button]]))
+            else:
+                await message.edit_reply_markup()
         except RPCError as e:
             logger.warning('Failed to remove buttons from message {}: {}', message.id, e)
 

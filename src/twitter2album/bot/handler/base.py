@@ -216,29 +216,16 @@ class ContextualResponder(ABC):
                     raise UserException('Failed to send media')
                 return album
 
-    def markup_manual(self, old: InlineKeyboardMarkup | Any = None):
-        if not isinstance(old, InlineKeyboardMarkup):
-            actions = ['Silent', 'Forward']
-        else:
-            transitions = {
-                'Silent': 'Caption',
-                'Caption': 'Silent',
-                'Forward': 'Forwarded',
-                'Forwarded': 'Forwarded',
-            }
-            actions = [
-                transitions[button.text]
-                for line in old.inline_keyboard
-                for button in line
-                if button.text in transitions
-            ]
-
-        buttons = [
-            InlineKeyboardButton(action, callback_data=action)  #
-            for action in actions
-        ]
-
-        return InlineKeyboardMarkup([buttons])
+    def markup_manual(self):
+        return InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton('Silent', callback_data='manual:silent'),
+                InlineKeyboardButton('Caption', callback_data='manual:caption'),
+            ],
+            [
+                InlineKeyboardButton('Forward', callback_data='manual:forward'),
+            ],
+        ])
 
     def markup_import(self, rid: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
