@@ -45,7 +45,7 @@ class ButtonResponder(ContextualResponder):
         if quoted is None:
             return message
 
-        if message.text == f'album={quoted.id}':
+        if message.text == f"album={quoted.id}":
             return quoted
 
         raise StateException()
@@ -60,14 +60,14 @@ class ButtonResponder(ContextualResponder):
             return
 
         match self.query.data:
-            case 'noop':
+            case "noop":
                 await self.query.answer()
 
-            case 'manual:silent':
+            case "manual:silent":
                 await self.handle_manual_silent()
-            case 'manual:caption':
+            case "manual:caption":
                 await self.handle_manual_caption()
-            case 'manual:forward':
+            case "manual:forward":
                 await self.handle_manual_forward()
 
             case str(data):
@@ -81,7 +81,7 @@ class ButtonResponder(ContextualResponder):
             parse_mode=ParseMode.HTML,
             reply_markup=self.markup_manual(),
         )
-        await self.query.answer('Caption silenced')
+        await self.query.answer("Caption silenced")
 
     async def handle_manual_caption(self):
         url = self.extract_source_url()
@@ -92,13 +92,13 @@ class ButtonResponder(ContextualResponder):
             parse_mode=ParseMode.HTML,
             reply_markup=self.markup_manual(),
         )
-        await self.query.answer('Caption rendered')
+        await self.query.answer("Caption rendered")
 
     async def handle_manual_forward(self):
         target = self.user.forward
         if target is None:
             await self.query.answer()
-            raise UserException('No forward target set. Use /forward to choose one')
+            raise UserException("No forward target set. Use /forward to choose one")
 
         url = self.extract_source_url()
         chat = self.message.chat
@@ -107,33 +107,33 @@ class ButtonResponder(ContextualResponder):
         await self.bot.forward_messages(target, chat.id, [message.id for message in album])
         self.mark_skipped(url)
 
-        await self.query.answer('Forwarded')
-        await self.remove_buttons('Forwarded')
+        await self.query.answer("Forwarded")
+        await self.remove_buttons("Forwarded")
 
     async def handle_state(self, data: str):
         match self.user.state:
             # auth
-            case AskingLoginPlatform() if data.startswith('login:'):
+            case AskingLoginPlatform() if data.startswith("login:"):
                 await self.handle_login_platform(data)
-            case AskingLogoutAccount() if data.startswith('logout:'):
+            case AskingLogoutAccount() if data.startswith("logout:"):
                 await self.handle_logout_account(data)
 
             # import
-            case AskingImportAccount() if data.startswith('import:account:'):
-                await self.handle_import_account(data.removeprefix('import:account:'))
-            case Importing() as state if data == f'import:silent:{state.rid}':
+            case AskingImportAccount() if data.startswith("import:account:"):
+                await self.handle_import_account(data.removeprefix("import:account:"))
+            case Importing() as state if data == f"import:silent:{state.rid}":
                 await self.handle_import_silent(state)
-            case Importing() as state if data == f'import:caption:{state.rid}':
+            case Importing() as state if data == f"import:caption:{state.rid}":
                 await self.handle_import_caption(state)
-            case Importing() as state if data == f'import:skip:{state.rid}':
+            case Importing() as state if data == f"import:skip:{state.rid}":
                 await self.handle_import_skip(state)
-            case Importing() as state if data == f'import:unbookmark:{state.rid}':
+            case Importing() as state if data == f"import:unbookmark:{state.rid}":
                 await self.handle_import_unbookmark(state)
-            case Importing() as state if data == f'import:commit:{state.rid}':
+            case Importing() as state if data == f"import:commit:{state.rid}":
                 await self.handle_import_commit(state)
 
             # leftover buttons from other import batches
-            case _ if data.startswith('import:'):
+            case _ if data.startswith("import:"):
                 await self.handle_import_leftover()
 
             # unknown
@@ -141,38 +141,38 @@ class ButtonResponder(ContextualResponder):
                 raise StateException()
 
     async def handle_login_platform(self, data: str):
-        match data.split(':', 1):
-            case ['login', platform] if platform in C.platforms:
+        match data.split(":", 1):
+            case ["login", platform] if platform in C.platforms:
                 self.user.state = AskingLoginHandle(platform=platform)
                 self.user.save()
                 await self.query.answer()
-                await self.message.edit_text(f'Send your {C.platforms[platform]} handle.')
+                await self.message.edit_text(f"Send your {C.platforms[platform]} handle.")
 
-            case ['login', platform]:
-                raise UserException(f'Unknown platform `{platform}`')
+            case ["login", platform]:
+                raise UserException(f"Unknown platform `{platform}`")
 
             case _:
-                raise StateException('/login')
+                raise StateException("/login")
 
     async def handle_logout_account(self, data: str):
-        match data.split(':', 2):
-            case ['logout', 'twitter', handle]:
+        match data.split(":", 2):
+            case ["logout", "twitter", handle]:
                 await self.twitter.logout(handle)
                 await self.query.answer()
-                await self.message.edit_text(f'Logged out of {C.platforms["twitter"]} as {handle}')
+                await self.message.edit_text(f"Logged out of {C.platforms['twitter']} as {handle}")
 
-            case ['logout', 'bsky', did] if did in self.user.bsky:
+            case ["logout", "bsky", did] if did in self.user.bsky:
                 credentials = self.user.bsky.pop(did)
                 self.user.save()
                 await self.query.answer()
-                await self.message.edit_text(f'Logged out of {C.platforms["bsky"]} as {credentials.handle}')
+                await self.message.edit_text(f"Logged out of {C.platforms['bsky']} as {credentials.handle}")
 
             case _:
-                raise StateException('/logout')
+                raise StateException("/logout")
 
     async def handle_import_account(self, handle: str):
         if handle not in await self.twitter.handles():
-            raise StateException('/import')
+            raise StateException("/import")
 
         rid = uuid4().hex
         self.ctx.cache.gen.put(rid, self.twitter.bookmarks_of(handle))
@@ -181,7 +181,7 @@ class ButtonResponder(ContextualResponder):
         self.user.save()
 
         await self.query.answer()
-        await self.message.edit_text(f'Importing bookmarks of {handle}')
+        await self.message.edit_text(f"Importing bookmarks of {handle}")
 
         await self.import_advance(self.message.chat, rid, handle)
 
@@ -211,8 +211,8 @@ class ButtonResponder(ContextualResponder):
 
         self.mark_skipped(url)
 
-        await self.query.answer('Skipped')
-        await self.remove_buttons('Skipped')
+        await self.query.answer("Skipped")
+        await self.remove_buttons("Skipped")
         await self.import_advance(self.message.chat, state.rid, state.handle)
 
     async def handle_import_unbookmark(self, state: Importing):
@@ -221,17 +221,17 @@ class ButtonResponder(ContextualResponder):
         try:
             await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(url))
         except UserException as e:
-            logger.warning('Failed to unbookmark {}: {}', url, e)
-            await self.query.answer('Failed to unbookmark', show_alert=True)
+            logger.warning("Failed to unbookmark {}: {}", url, e)
+            await self.query.answer("Failed to unbookmark", show_alert=True)
         else:
-            await self.query.answer('Unbookmarked')
+            await self.query.answer("Unbookmarked")
             await self.import_advance(self.message.chat, state.rid, state.handle)
 
     async def handle_import_commit(self, state: Importing):
         target = self.user.forward
         if target is None:
             await self.query.answer()
-            raise UserException('No forward target set. Use /forward to choose one')
+            raise UserException("No forward target set. Use /forward to choose one")
 
         url = self.extract_source_url()
         chat = self.message.chat
@@ -243,14 +243,14 @@ class ButtonResponder(ContextualResponder):
         try:
             await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(url))
         except UserException:
-            await self.query.answer('Forwarded, but failed to unbookmark', show_alert=True)
+            await self.query.answer("Forwarded, but failed to unbookmark", show_alert=True)
         else:
-            await self.query.answer('Forwarded and unbookmarked')
-            await self.remove_buttons('Forwarded & Unbookmarked')
+            await self.query.answer("Forwarded and unbookmarked")
+            await self.remove_buttons("Forwarded & Unbookmarked")
             await self.import_advance(chat, state.rid, state.handle)
 
     async def handle_import_leftover(self):
-        await self.query.answer('These buttons are no longer relevant')
+        await self.query.answer("These buttons are no longer relevant")
         await self.remove_buttons()
 
     def extract_source_url(self):
@@ -259,10 +259,10 @@ class ButtonResponder(ContextualResponder):
             if entity.type == MessageEntityType.TEXT_LINK:
                 start = entity.offset
                 end = entity.offset + entity.length
-                if self.message.caption[start:end] == 'source':
+                if self.message.caption[start:end] == "source":
                     return entity.url
 
-        raise UserException('Cannot find post source. Please send the source URL again')
+        raise UserException("Cannot find post source. Please send the source URL again")
 
     async def import_advance(self, chat: Chat, rid: str, handle: str):
         """
@@ -281,7 +281,7 @@ class ButtonResponder(ContextualResponder):
                 await self.ctx.cache.gen.discard(rid)
                 self.user.reset_state()
                 self.user.save()
-                await self.bot.send_message(chat.id, 'No more bookmarks')
+                await self.bot.send_message(chat.id, "No more bookmarks")
                 return
 
             post = TweetEx(tweet)
@@ -294,7 +294,7 @@ class ButtonResponder(ContextualResponder):
                 media = await self.get_media(post)
             except UserException as e:
                 # One unrenderable post should not abandon a whole run.
-                logger.warning('Skipping {} during import: {}', url, e)
+                logger.warning("Skipping {} during import: {}", url, e)
                 continue
 
             if not media:
@@ -321,12 +321,12 @@ class ButtonResponder(ContextualResponder):
 
         try:
             if reason:
-                button = InlineKeyboardButton(reason, callback_data='noop')
+                button = InlineKeyboardButton(reason, callback_data="noop")
                 await message.edit_reply_markup(reply_markup=InlineKeyboardMarkup([[button]]))
             else:
                 await message.edit_reply_markup()
         except RPCError as e:
-            logger.warning('Failed to remove buttons from message {}: {}', message.id, e)
+            logger.warning("Failed to remove buttons from message {}: {}", message.id, e)
 
     def is_skipped(self, url: str) -> bool:
         return Skip.find(self.user._id, url) is not None

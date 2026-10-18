@@ -8,9 +8,9 @@ import serde
 @serde.serde
 @dataclass(frozen=True)
 class Log:
-    type Level = Literal['TRACE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+    type Level = Literal["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-    level: Level = serde.field(default='INFO', deserializer=lambda x: x.upper())
+    level: Level = serde.field(default="INFO", deserializer=lambda x: x.upper())
 
 
 @serde.serde
@@ -30,5 +30,5 @@ class Config:
 
     @classmethod
     def load(cls) -> Self:
-        with open('./config.toml', 'rb') as f:
+        with open("./config.toml", "rb") as f:
             return serde.from_dict(cls, tomllib.load(f))

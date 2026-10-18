@@ -7,8 +7,8 @@ from twitter2album.config import Config
 
 async def start(config: Config):
     async with Context(config):
-        logger.info('Handling incoming messages (Ctrl+C to stop)')
+        logger.info("Handling incoming messages (Ctrl+C to stop)")
         await idle()
 
 
-__all__ = ['start']
+__all__ = ["start"]

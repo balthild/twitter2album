@@ -24,8 +24,8 @@ class Context:
         self.bot.add_handler(ButtonHandler(self))
         self.bot.add_handler(ShareHandler(self))
 
-        if config.log.level == 'TRACE':
-            logger.trace('TRACE mode enabled. Unhandled raw updates will be printed')
+        if config.log.level == "TRACE":
+            logger.trace("TRACE mode enabled. Unhandled raw updates will be printed")
             self.bot.on_raw_update()(self.trace)
 
     async def __aenter__(self) -> Self:
@@ -42,5 +42,5 @@ class Context:
     def trace(self, client, update, *args, **kwargs):
         from twitter2album.utils import dbg
 
-        logger.trace('Unhandled update received')
+        logger.trace("Unhandled update received")
         dbg(update, depth=12, position=False)

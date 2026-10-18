@@ -29,7 +29,7 @@ class Model:
     @classmethod
     def collection(cls) -> Collection:
         if cls.db is None:
-            raise RuntimeError('The database is not open')
+            raise RuntimeError("The database is not open")
 
         return cls.db[cls.COLLECTION]
 
@@ -52,7 +52,7 @@ class Model:
 
     def save(self) -> Self:
         doc = self.serialize()
-        doc.pop('_id', None)
+        doc.pop("_id", None)
 
         if self._id is None:
             self._id = self.collection().insert_one(doc).inserted_id
@@ -62,15 +62,15 @@ class Model:
         # containing a nested document, it fails with "the field ... is not a
         # valid field name". Updating and inserting separately avoids that path,
         # and the unique index on _id rejects a duplicate if one races in.
-        updated = self.collection().update_one({'_id': self._id}, {'$set': doc})
+        updated = self.collection().update_one({"_id": self._id}, {"$set": doc})
         if updated.matched_count == 0:
-            self.collection().insert_one({'_id': self._id, **doc})
+            self.collection().insert_one({"_id": self._id, **doc})
 
         return self
 
     def delete(self):
         if self._id is not None:
-            self.collection().delete_one({'_id': self._id})
+            self.collection().delete_one({"_id": self._id})
 
     def serialize(self) -> Document:
         return serde.to_dict(self)

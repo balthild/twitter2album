@@ -39,13 +39,13 @@ class AskingLoginPlatform:
 
 @serde.serde
 class AskingLoginHandle:
-    platform: str = ''
+    platform: str = ""
 
 
 @serde.serde
 class AskingLoginSecret:
-    platform: str = ''
-    handle: str = ''
+    platform: str = ""
+    handle: str = ""
 
 
 @serde.serde
@@ -66,4 +66,4 @@ class AskingImportAccount:
 @serde.serde
 class Importing:
     rid: str
-    handle: str = ''
+    handle: str = ""

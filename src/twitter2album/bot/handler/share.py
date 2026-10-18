@@ -33,12 +33,12 @@ class ShareResponder(ContextualResponder):
 
     async def handle_chat_shared(self, shared: ChatShared):
         if len(shared.chats) != 1:
-            raise UserException(f'Expected exactly one chat, found {len(shared.chats)}')
+            raise UserException(f"Expected exactly one chat, found {len(shared.chats)}")
 
         self.user.forward = shared.chats[0].id
         self.user.save()
 
         await self.message.reply(
-            'Forwarding chat updated',
+            "Forwarding chat updated",
             reply_markup=ReplyKeyboardRemove(),
         )

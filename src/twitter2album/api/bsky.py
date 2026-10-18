@@ -33,27 +33,27 @@ class BskyClient(AsyncClient):
 
         user = User.resolve(self.user_id)
         if not user.bsky:
-            raise UserException('Bluesky is not logged in. Use /login to add an account')
+            raise UserException("Bluesky is not logged in. Use /login to add an account")
 
         # Reading a public post needs no particular account, so use the first one.
         did = next(iter(user.bsky))
         credentials = user.bsky[did]
 
         try:
-            logger.info('Signing in Bluesky as {} with saved session', credentials.handle)
+            logger.info("Signing in Bluesky as {} with saved session", credentials.handle)
             await self.login(session_string=credentials.session)
-        except (AtProtocolError, UserException):
-            logger.info('Signing in Bluesky as {} with password', credentials.handle)
+        except AtProtocolError, UserException:
+            logger.info("Signing in Bluesky as {} with password", credentials.handle)
             await self.login(credentials.handle, credentials.password)
 
     async def login(self, *args, **kwargs) -> ProfileViewDetailed:
         try:
-            kwargs.pop('fetch_bsky_profile', None)
+            kwargs.pop("fetch_bsky_profile", None)
             self.profile = await super().login(*args, **kwargs, fetch_bsky_profile=True)
             assert self.profile is not None
             return self.profile
         except AtProtocolError as e:
-            raise UserException(f'Bluesky login failed: {e}')
+            raise UserException(f"Bluesky login failed: {e}")
 
     async def persist_session(self, event: SessionEvent, session: Session):
         if event not in (SessionEvent.CREATE, SessionEvent.REFRESH):
@@ -71,40 +71,40 @@ class BskyClient(AsyncClient):
         user.save()
 
     async def get_post_ex(self, url: URL) -> BskyPostEx:
-        match url.path.split('/'):
-            case ['', 'profile', author, 'post', rkey, *_]:
-                uri = f'at://{author}/app.bsky.feed.post/{rkey}'
+        match url.path.split("/"):
+            case ["", "profile", author, "post", rkey, *_]:
+                uri = f"at://{author}/app.bsky.feed.post/{rkey}"
             case _:
-                raise UserException('Invalid bsky post URL')
+                raise UserException("Invalid bsky post URL")
 
         try:
             response = await self.get_post_thread(uri, depth=0, parent_height=0)
         except AtProtocolError:
-            raise UserException(f'Post `{rkey}` not found')
+            raise UserException(f"Post `{rkey}` not found")
 
         match response.thread:
             case ThreadViewPost(post=post) if post.embed:
                 return BskyPostEx(post)
             case ThreadViewPost():
-                raise UserException(f'Post `{rkey}` contains no media')
+                raise UserException(f"Post `{rkey}` contains no media")
             case _ as thread:
-                raise UserException(f'Post `{rkey}` has unknown type: {type(thread)}')
+                raise UserException(f"Post `{rkey}` has unknown type: {type(thread)}")
 
 
 class BskyPostEx(AbstractPost):
     def __init__(self, inner: PostView) -> None:
         if not isinstance(inner.record, Record):
-            raise UserException('Invalid bsky post')
+            raise UserException("Invalid bsky post")
 
         self.inner: Final = inner
         self.record: Final = inner.record
 
     def url(self) -> str:
-        [did, _, rkey] = self.inner.uri.removeprefix('at://').split('/')
-        return f'https://bsky.app/profile/{did}/post/{rkey}'
+        [did, _, rkey] = self.inner.uri.removeprefix("at://").split("/")
+        return f"https://bsky.app/profile/{did}/post/{rkey}"
 
     def render(self) -> str:
-        data = bytes(self.record.text, 'utf-8')
+        data = bytes(self.record.text, "utf-8")
 
         links: list[tuple[int, int, str]] = []
         for facet in self.record.facets or []:
@@ -125,12 +125,12 @@ class BskyPostEx(AbstractPost):
             segments.append(data[index:start].decode())
             segments.append(f'<a href="{url}">')
             segments.append(data[start:end].decode())
-            segments.append('</a>')
+            segments.append("</a>")
             index = end
 
         segments.append(data[index:].decode())
 
-        return ''.join(segments)
+        return "".join(segments)
 
     def photos(self):
         match self.inner.embed:

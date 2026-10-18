@@ -48,7 +48,7 @@ class TextResponder(ContextualResponder):
 
     @property
     def text(self) -> str:
-        return self.message.text or ''
+        return self.message.text or ""
 
     async def notify(self, text: str):
         await self.message.reply(text, parse_mode=ParseMode.MARKDOWN)
@@ -62,29 +62,29 @@ class TextResponder(ContextualResponder):
         if self.skipped(self.message.chat):
             return
         if self.unknown(self.message.chat):
-            raise UserException(f'Unknown chat `{self.message.chat.id}`')
+            raise UserException(f"Unknown chat `{self.message.chat.id}`")
 
         match parts[0]:
-            case '/cancel':
+            case "/cancel":
                 return await self.handle_cancel()
 
             # auth
-            case '/accounts':
+            case "/accounts":
                 return await self.handle_accounts()
-            case '/login':
+            case "/login":
                 return await self.handle_login()
-            case '/logout':
+            case "/logout":
                 return await self.handle_logout()
-            case '/forward':
+            case "/forward":
                 return await self.handle_forward()
 
             # import
-            case '/import':
+            case "/import":
                 return await self.handle_import()
 
             # unknown
-            case str(command) if command.startswith('/'):
-                return await self.notify('Unknown command')
+            case str(command) if command.startswith("/"):
+                return await self.notify("Unknown command")
 
         if not self.user.idle:
             return await self.handle_state()
@@ -95,7 +95,7 @@ class TextResponder(ContextualResponder):
 
     async def handle_cancel(self):
         if self.user.idle:
-            await self.notify('Nothing to cancel')
+            await self.notify("Nothing to cancel")
             return
 
         if isinstance(self.user.state, Importing):
@@ -103,18 +103,18 @@ class TextResponder(ContextualResponder):
 
         self.user.state = None
         self.user.save()
-        await self.bot.send_message(self.message.chat.id, 'Operation cancelled')
+        await self.bot.send_message(self.message.chat.id, "Operation cancelled")
 
     async def handle_accounts(self):
         accounts = await self.accounts()
 
         if not accounts:
-            await self.notify('No accounts')
+            await self.notify("No accounts")
             return
 
-        text = 'Accounts:\n'
+        text = "Accounts:\n"
         for account in accounts:
-            text += f'- {C.platforms[account.platform]}: {account.handle}\n'
+            text += f"- {C.platforms[account.platform]}: {account.handle}\n"
 
         await self.notify(text)
 
@@ -123,11 +123,11 @@ class TextResponder(ContextualResponder):
         self.user.save()
 
         buttons = [
-            InlineKeyboardButton(C.platforms[platform], callback_data=f'login:{platform}')  #
+            InlineKeyboardButton(C.platforms[platform], callback_data=f"login:{platform}")  #
             for platform in C.platforms
         ]
         await self.message.reply(
-            'Which platform?',
+            "Which platform?",
             reply_markup=InlineKeyboardMarkup([buttons]),
         )
 
@@ -135,26 +135,26 @@ class TextResponder(ContextualResponder):
         accounts = await self.accounts()
 
         if not accounts:
-            await self.notify('Nothing to log out of')
+            await self.notify("Nothing to log out of")
             return
 
         buttons = [
             InlineKeyboardButton(
-                f'{C.platforms[account.platform]}: {account.handle}',
-                callback_data=f'logout:{account.platform}:{account.identifier}',
+                f"{C.platforms[account.platform]}: {account.handle}",
+                callback_data=f"logout:{account.platform}:{account.identifier}",
             )
             for account in accounts
         ]
 
         await self.message.reply(
-            'Which account?',
+            "Which account?",
             reply_markup=InlineKeyboardMarkup([[button] for button in buttons]),
         )
 
     async def handle_forward(self):
         buttons = [
             KeyboardButton(
-                text='Choose a Channel',
+                text="Choose a Channel",
                 request_chat=KeyboardButtonRequestChat(
                     request_id=1,
                     chat_is_channel=True,
@@ -164,7 +164,7 @@ class TextResponder(ContextualResponder):
                 ),
             ),
             KeyboardButton(
-                text='Choose a Group',
+                text="Choose a Group",
                 request_chat=KeyboardButtonRequestChat(
                     request_id=2,
                     chat_is_channel=False,
@@ -176,7 +176,7 @@ class TextResponder(ContextualResponder):
         ]
 
         await self.message.reply(
-            text='Please select a group or channel:',
+            text="Please select a group or channel:",
             reply_markup=ReplyKeyboardMarkup([[*buttons]], resize_keyboard=True),
         )
 
@@ -191,12 +191,12 @@ class TextResponder(ContextualResponder):
 
         handles = await self.twitter.handles()
         buttons = [
-            InlineKeyboardButton(handle, callback_data=f'import:account:{handle}')  #
+            InlineKeyboardButton(handle, callback_data=f"import:account:{handle}")  #
             for handle in handles
         ]
 
         await self.message.reply(
-            'Which account to import bookmarks from?',
+            "Which account to import bookmarks from?",
             reply_markup=InlineKeyboardMarkup([[button] for button in buttons]),
         )
 
@@ -204,7 +204,7 @@ class TextResponder(ContextualResponder):
         match self.user.state:
             # login
             case AskingLoginPlatform():
-                await self.notify('Pick a platform with the buttons above, or /cancel')
+                await self.notify("Pick a platform with the buttons above, or /cancel")
 
             case AskingLoginHandle() as state:
                 try:
@@ -220,33 +220,33 @@ class TextResponder(ContextualResponder):
 
             # logout
             case AskingLogoutAccount():
-                await self.notify('Pick an account with the buttons above, or /cancel')
+                await self.notify("Pick an account with the buttons above, or /cancel")
 
             # import
             case AskingImportAccount():
-                await self.notify('Pick an account with the buttons above, or /cancel')
+                await self.notify("Pick an account with the buttons above, or /cancel")
 
             case Importing():
-                await self.notify('Import is in progress. Use the buttons, or /cancel')
+                await self.notify("Import is in progress. Use the buttons, or /cancel")
 
     async def handle_login_handle(self, state: AskingLoginHandle):
         if state.platform not in C.platforms:
-            raise StateException('/login')
+            raise StateException("/login")
 
         self.user.state = AskingLoginSecret(platform=state.platform, handle=self.text.strip())
         self.user.save()
 
         match state.platform:
-            case 'twitter':
+            case "twitter":
                 message = (
-                    'Send your Twitter cookies, like `auth_token=...; ct0=...`\n'
-                    'You can obtain it with [unjar](https://github.com/vladkens/unjar)\n'
-                    'Example: `unjar -b brave -f header x.com`'
+                    "Send your Twitter cookies, like `auth_token=...; ct0=...`\n"
+                    "You can obtain it with [unjar](https://github.com/vladkens/unjar)\n"
+                    "Example: `unjar -b brave -f header x.com`"
                 )
-            case 'bsky':
-                message = 'Send your Bluesky password'
+            case "bsky":
+                message = "Send your Bluesky password"
             case _:
-                raise StateException('/login')
+                raise StateException("/login")
 
         await self.bot.send_message(self.message.chat.id, message)
 
@@ -254,10 +254,10 @@ class TextResponder(ContextualResponder):
         secret = self.text.strip()
 
         match state.platform:
-            case 'twitter':
+            case "twitter":
                 await self.twitter.login(state.handle, cookies=secret)
 
-            case 'bsky':
+            case "bsky":
                 profile = await self.bsky.login(state.handle, secret)
                 self.user.bsky[profile.did] = BskyCredentials(
                     handle=state.handle,
@@ -266,14 +266,14 @@ class TextResponder(ContextualResponder):
                 )
 
             case _:
-                raise StateException('/login')
+                raise StateException("/login")
 
         self.user.state = None
         self.user.save()
 
         await self.bot.send_message(
             self.message.chat.id,
-            f'Logged in to {C.platforms[state.platform]} as {state.handle}',
+            f"Logged in to {C.platforms[state.platform]} as {state.handle}",
         )
 
     async def handle_url(self, url: str, pick: Sequence[str] = ()):
@@ -284,19 +284,19 @@ class TextResponder(ContextualResponder):
         for expr in pick:
             if not expr:
                 continue
-            elif re.match(r'^\d+$', expr):
+            elif re.match(r"^\d+$", expr):
                 subset.append(int(expr))
-            elif re.match(r'^\d+-\d+$', expr):
-                [start, end] = [int(x) for x in expr.split('-')]
+            elif re.match(r"^\d+-\d+$", expr):
+                [start, end] = [int(x) for x in expr.split("-")]
                 subset.extend(range(start, end + 1))
             else:
-                raise UserException('Invalid picking expression. Example: 1 3-4')
+                raise UserException("Invalid picking expression. Example: 1 3-4")
 
         count = len(media)
         if subset:
             media = [medium for i, medium in enumerate(media) if i + 1 in subset]
             if not media:
-                raise UserException(f'None of the {count} media is picked')
+                raise UserException(f"None of the {count} media is picked")
 
         await self.send_album(self.message.chat, post, media, self.markup_manual())
 
@@ -308,4 +308,4 @@ class TextResponder(ContextualResponder):
         try:
             await self.message.delete()
         except RPCError:
-            logger.warning('Could not delete message {} in {}', self.message.id, self.message.chat.id)
+            logger.warning("Could not delete message {} in {}", self.message.id, self.message.chat.id)

@@ -13,8 +13,8 @@ from .config import Config
 def main():
     config = Config.load()
 
-    os.environ['TWS_HTTP_BACKEND'] = 'curl'
-    os.environ['LOGURU_LEVEL'] = config.log.level
+    os.environ["TWS_HTTP_BACKEND"] = "curl"
+    os.environ["LOGURU_LEVEL"] = config.log.level
 
     twscrape.logger.set_log_level = lambda _: ...  # type: ignore
     twscrape.logger._LOG_LEVEL = config.log.level

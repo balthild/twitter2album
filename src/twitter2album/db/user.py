@@ -26,7 +26,7 @@ class User(Model):
     than one chat.
     """
 
-    COLLECTION: ClassVar[str] = 'users'
+    COLLECTION: ClassVar[str] = "users"
 
     state: State = None
     forward: int | None = None
@@ -35,7 +35,7 @@ class User(Model):
 
     @classmethod
     def resolve(cls, user_id: int) -> Self:
-        return cls.one({'_id': user_id}) or cls(_id=user_id)
+        return cls.one({"_id": user_id}) or cls(_id=user_id)
 
     @property
     def idle(self) -> bool:

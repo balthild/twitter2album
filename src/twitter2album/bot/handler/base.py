@@ -60,7 +60,7 @@ class ContextualHandler(ABC, Handler):
         except Exception as e:  # noqa: BLE001
             logger.error(str(e))
             traceback.print_exc()
-            await responder.notify('Internal Error')
+            await responder.notify("Internal Error")
 
     @abstractmethod
     def responder(self, ctx: Context, *args) -> ContextualResponder: ...
@@ -106,15 +106,15 @@ class ContextualResponder(ABC):
         accounts = []
 
         for handle in await self.twitter.handles():
-            accounts.append(Account('twitter', handle, handle))
+            accounts.append(Account("twitter", handle, handle))
 
         for did, credentials in self.user.bsky.items():
-            accounts.append(Account('bsky', credentials.handle, did))
+            accounts.append(Account("bsky", credentials.handle, did))
 
         return accounts
 
     async def get_post(self, url: str) -> AbstractPost:
-        @self.ctx.cache.disk.memoize_async(name='t2a:web:post')
+        @self.ctx.cache.disk.memoize_async(name="t2a:web:post")
         async def fetch(url: str) -> AbstractPost:
             parsed = urlparse(url)
             if parsed.netloc in C.domains.twitter:
@@ -124,7 +124,7 @@ class ContextualResponder(ABC):
                 await self.bsky.authenticate()
                 return await self.bsky.get_post_ex(parsed)
             else:
-                raise UserException('Unrecognized URL')
+                raise UserException("Unrecognized URL")
 
         return await fetch(url)
 
@@ -147,18 +147,18 @@ class ContextualResponder(ABC):
                 yield item
 
     async def fetch_images(self, post: AbstractPost) -> AsyncIterator[Image]:
-        @self.ctx.cache.disk.memoize_async(name='t2a:web:media')
+        @self.ctx.cache.disk.memoize_async(name="t2a:web:media")
         async def fetch(url: str) -> bytes:
             response = await self.http.get(url)
             if response.status // 100 != 2:
-                raise UserException(f'{response.status} {response.reason} while fetching {url}')
+                raise UserException(f"{response.status} {response.reason} while fetching {url}")
             return await response.read()
 
         for url in post.photos():
             try:
                 yield open_image(await fetch(url))
             except UnidentifiedImageError:
-                raise UserException(f'Failed to decode image data from {url}')
+                raise UserException(f"Failed to decode image data from {url}")
 
     async def send_album(
         self,
@@ -178,7 +178,7 @@ class ContextualResponder(ABC):
                 )
 
                 if message is None:
-                    raise UserException('Failed to send media')
+                    raise UserException("Failed to send media")
                 return [message]
 
             case [InputMediaVideo() as video]:
@@ -191,7 +191,7 @@ class ContextualResponder(ABC):
                 )
 
                 if message is None:
-                    raise UserException('Failed to send media')
+                    raise UserException("Failed to send media")
                 return [message]
 
             case [InputMediaAnimation() as gif]:
@@ -204,7 +204,7 @@ class ContextualResponder(ABC):
                 )
 
                 if message is None:
-                    raise UserException('Failed to send media')
+                    raise UserException("Failed to send media")
                 return [message]
 
             case [*media]:
@@ -213,45 +213,45 @@ class ContextualResponder(ABC):
 
                 album = await self.bot.send_media_group(chat.id, [*self.map_media(media)])
 
-                reply = await album[0].reply(f'album={album[0].id}', quote=True)
+                reply = await album[0].reply(f"album={album[0].id}", quote=True)
                 await reply.edit_reply_markup(markup)
 
                 if not album:
-                    raise UserException('Failed to send media')
+                    raise UserException("Failed to send media")
                 return album
 
     def markup_manual(self):
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton('Silent', callback_data='manual:silent'),
-                InlineKeyboardButton('Caption', callback_data='manual:caption'),
+                InlineKeyboardButton("Silent", callback_data="manual:silent"),
+                InlineKeyboardButton("Caption", callback_data="manual:caption"),
             ],
             [
-                InlineKeyboardButton('Forward', callback_data='manual:forward'),
+                InlineKeyboardButton("Forward", callback_data="manual:forward"),
             ],
         ])
 
     def markup_import(self, rid: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton('Silent', callback_data=f'import:silent:{rid}'),
-                InlineKeyboardButton('Caption', callback_data=f'import:caption:{rid}'),
+                InlineKeyboardButton("Silent", callback_data=f"import:silent:{rid}"),
+                InlineKeyboardButton("Caption", callback_data=f"import:caption:{rid}"),
             ],
             [
-                InlineKeyboardButton('Skip', callback_data=f'import:skip:{rid}'),
-                InlineKeyboardButton('Unbookmark', callback_data=f'import:unbookmark:{rid}'),
+                InlineKeyboardButton("Skip", callback_data=f"import:skip:{rid}"),
+                InlineKeyboardButton("Unbookmark", callback_data=f"import:unbookmark:{rid}"),
             ],
             [
-                InlineKeyboardButton('Forward & Unbookmark', callback_data=f'import:commit:{rid}'),
+                InlineKeyboardButton("Forward & Unbookmark", callback_data=f"import:commit:{rid}"),
             ],
         ])
 
     def html_caption(self, post: AbstractPost) -> str:
         source = self.html_source(post.url())
         content = post.render()
-        sep = '\n' if '\n' in content else ' '
+        sep = "\n" if "\n" in content else " "
 
-        return f'{content}{sep}{source}'.strip()
+        return f"{content}{sep}{source}".strip()
 
     def html_source(self, url: str) -> str:
         return f'<a href="{url}">source</a>'

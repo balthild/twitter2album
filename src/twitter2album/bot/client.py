@@ -7,7 +7,7 @@ from twitter2album.const import C
 class BotClient(Client):
     def __init__(self, config: Config):
         super().__init__(
-            name=config.telegram.bot_token.split(':')[0],
+            name=config.telegram.bot_token.split(":")[0],
             bot_token=config.telegram.bot_token,
             api_id=config.telegram.api_id,
             api_hash=config.telegram.api_hash,

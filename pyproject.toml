@@ -39,4 +39,3 @@ extend-immutable-calls = ["serde.field"]
 
 [tool.ruff.format]
 preview = true
-quote-style = "single"

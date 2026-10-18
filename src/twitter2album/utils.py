@@ -17,7 +17,7 @@ from prettyprinter.prettyprinter import (
 def dbg(value, depth=2, position=False):
     if position:
         caller = getframeinfo(currentframe().f_back)  # type: ignore
-        print(f'{caller.filename}:{caller.lineno}', file=sys.stderr)
+        print(f"{caller.filename}:{caller.lineno}", file=sys.stderr)
 
     cpprint(DebugWrapper(value), depth=depth, stream=sys.stderr)
 
@@ -42,7 +42,7 @@ class DebugWrapper:
         return isinstance(self.value, Mapping)
 
     def is_object(self):
-        return isinstance(self.value, object) and hasattr(self.value, '__dict__')
+        return isinstance(self.value, object) and hasattr(self.value, "__dict__")
 
     def is_trivial(self):
         if self.is_primitive() or self.is_basic():
@@ -55,7 +55,7 @@ class DebugWrapper:
 @register_pretty(DebugWrapper)
 def pretty_debug(wrapper: DebugWrapper, ctx: PrettyContext):
     if wrapper.is_primitive():
-        return pretty_python_value(wrapper.value, relax_once(ctx, 'primitive'))
+        return pretty_python_value(wrapper.value, relax_once(ctx, "primitive"))
 
     if wrapper.is_trivial():
         return pretty_python_value(wrapper.value, ctx)
@@ -63,7 +63,7 @@ def pretty_debug(wrapper: DebugWrapper, ctx: PrettyContext):
     if wrapper.is_sequence():
         items = [DebugWrapper(item) for item in wrapper.value]
         items = wrapper.ctor(items)
-        return pretty_python_value(items, relax_once(ctx, 'sequence'))
+        return pretty_python_value(items, relax_once(ctx, "sequence"))
 
     if wrapper.is_mapping():
         fields = {key: DebugWrapper(item) for key, item in wrapper.value.items()}

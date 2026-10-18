@@ -15,15 +15,15 @@ class Skip(Model):
     "one row per user per post" both guaranteed and a point lookup.
     """
 
-    COLLECTION: ClassVar[str] = 'skips'
+    COLLECTION: ClassVar[str] = "skips"
 
     @staticmethod
     def key(user: int, url: str) -> str:
-        return f'{user}:{url}'
+        return f"{user}:{url}"
 
     @classmethod
     def find(cls, user: int, url: str) -> Self | None:
-        return cls.one({'_id': cls.key(user, url)})
+        return cls.one({"_id": cls.key(user, url)})
 
     @classmethod
     def add(cls, user: int, url: str) -> Self:
