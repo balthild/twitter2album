@@ -67,3 +67,5 @@ class AskingImportAccount:
 class Importing:
     rid: str
     handle: str = ""
+    url: str = ""
+    multi: bool = False

@@ -57,7 +57,9 @@ class TextResponder(ContextualResponder):
         if not self.text:
             return
 
-        parts = self.text.split()
+        parts = [part for part in self.text.split() if part]
+        if self.bot.me and parts[0] == f"@{self.bot.me.username}":
+            parts = parts[1:]
 
         if self.skipped(self.message.chat):
             return
@@ -82,14 +84,13 @@ class TextResponder(ContextualResponder):
             case "/import":
                 return await self.handle_import()
 
-            # unknown
-            case str(command) if command.startswith("/"):
-                return await self.notify("Unknown command")
-
         if not self.user.idle:
-            return await self.handle_state()
+            return await self.handle_state(parts)
 
         match parts:
+            case [cmd, *_] if cmd.startswith("/"):
+                return await self.notify("Unknown command")
+
             case [url, *pick]:
                 return await self.handle_url(url, pick)
 
@@ -200,7 +201,7 @@ class TextResponder(ContextualResponder):
             reply_markup=InlineKeyboardMarkup([[button] for button in buttons]),
         )
 
-    async def handle_state(self):
+    async def handle_state(self, parts: Sequence[str]):
         match self.user.state:
             # login
             case AskingLoginPlatform():
@@ -225,6 +226,9 @@ class TextResponder(ContextualResponder):
             # import
             case AskingImportAccount():
                 await self.notify("Pick an account with the buttons above, or /cancel")
+
+            case Importing() as state if parts[0] == "/pick":
+                await self.handle_import_pick(state, parts[1:])
 
             case Importing():
                 await self.notify("Import is in progress. Use the buttons, or /cancel")
@@ -276,9 +280,25 @@ class TextResponder(ContextualResponder):
             f"Logged in to {C.platforms[state.platform]} as {state.handle}",
         )
 
+    async def handle_import_pick(self, state: Importing, pick: Sequence[str]):
+        post = await self.get_post(state.url)
+        media = await self.get_media(post)
+
+        subset = self.pick_media(media, pick)
+
+        await self.send_album(self.message.chat, post, subset, self.markup_import(state))
+
     async def handle_url(self, url: str, pick: Sequence[str] = ()):
         post = await self.get_post(url)
         media = await self.get_media(post)
+
+        subset = self.pick_media(media, pick)
+
+        await self.send_album(self.message.chat, post, subset, self.markup_manual())
+
+    def pick_media[T](self, media: list[T], pick: Sequence[str]) -> list[T]:
+        if not pick:
+            return media
 
         subset = []
         for expr in pick:
@@ -298,7 +318,7 @@ class TextResponder(ContextualResponder):
             if not media:
                 raise UserException(f"None of the {count} media is picked")
 
-        await self.send_album(self.message.chat, post, media, self.markup_manual())
+        return media
 
     async def drop_message(self):
         """

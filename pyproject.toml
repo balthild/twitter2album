@@ -33,8 +33,6 @@ line-length = 120
 ignore = ["PLR2044"]
 
 [tool.ruff.lint.flake8-bugbear]
-# `serde.field` wraps `dataclasses.field`, so RUF009 misreads it as a mutable
-# default; ruff only allowlists wrappers it knows, hence declaring it here.
 extend-immutable-calls = ["serde.field"]
 
 [tool.ruff.format]

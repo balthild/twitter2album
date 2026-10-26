@@ -29,6 +29,7 @@ from twitter2album.api import AbstractPost, BskyClient, TwitterClient
 from twitter2album.bot.context import Context
 from twitter2album.bot.types import Account
 from twitter2album.const import C
+from twitter2album.db.state import Importing
 from twitter2album.db.user import User
 from twitter2album.error import AbortException, StateException, UserException
 
@@ -231,20 +232,27 @@ class ContextualResponder(ABC):
             ],
         ])
 
-    def markup_import(self, rid: str) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("Silent", callback_data=f"import:silent:{rid}"),
-                InlineKeyboardButton("Caption", callback_data=f"import:caption:{rid}"),
-            ],
-            [
-                InlineKeyboardButton("Skip", callback_data=f"import:skip:{rid}"),
-                InlineKeyboardButton("Unbookmark", callback_data=f"import:unbookmark:{rid}"),
-            ],
-            [
-                InlineKeyboardButton("Forward & Unbookmark", callback_data=f"import:commit:{rid}"),
-            ],
-        ])
+    def markup_import(self, state: Importing) -> InlineKeyboardMarkup:
+        def buttons() -> Iterator[list[InlineKeyboardButton]]:
+            if state.multi:
+                yield [
+                    InlineKeyboardButton("Pick", switch_inline_query_current_chat="/pick "),
+                    InlineKeyboardButton("Combine (TODO)", callback_data="noop"),
+                ]
+
+            yield [
+                InlineKeyboardButton("Silent", callback_data=f"import:silent:{state.rid}"),
+                InlineKeyboardButton("Caption", callback_data=f"import:caption:{state.rid}"),
+            ]
+            yield [
+                InlineKeyboardButton("Skip", callback_data=f"import:skip:{state.rid}"),
+                InlineKeyboardButton("Unbookmark", callback_data=f"import:unbookmark:{state.rid}"),
+            ]
+            yield [
+                InlineKeyboardButton("Forward & Unbookmark", callback_data=f"import:commit:{state.rid}"),
+            ]
+
+        return InlineKeyboardMarkup([*buttons()])
 
     def html_caption(self, post: AbstractPost) -> str:
         source = self.html_source(post.url())

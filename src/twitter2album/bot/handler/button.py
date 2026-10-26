@@ -183,49 +183,43 @@ class ButtonResponder(ContextualResponder):
         await self.query.answer()
         await self.message.edit_text(f"Importing bookmarks of {handle}")
 
-        await self.import_advance(self.message.chat, rid, handle)
+        await self.import_advance(self.message.chat, self.user.state)
 
     async def handle_import_silent(self, state: Importing):
-        url = self.extract_source_url()
-
         await self.message.edit_caption(
-            self.html_source(url),
+            self.html_source(state.url),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_import(state.rid),
+            reply_markup=self.markup_import(state),
         )
         await self.query.answer()
 
     async def handle_import_caption(self, state: Importing):
-        url = self.extract_source_url()
-        post = await self.get_post(url)
+        post = await self.get_post(state.url)
 
         await self.message.edit_caption(
             self.html_caption(post),
             parse_mode=ParseMode.HTML,
-            reply_markup=self.markup_import(state.rid),
+            reply_markup=self.markup_import(state),
         )
         await self.query.answer()
 
     async def handle_import_skip(self, state: Importing):
-        url = self.extract_source_url()
-
-        self.mark_skipped(url)
+        self.mark_skipped(state.url)
 
         await self.query.answer("Skipped")
         await self.remove_buttons("Skipped")
-        await self.import_advance(self.message.chat, state.rid, state.handle)
+        await self.import_advance(self.message.chat, state)
 
     async def handle_import_unbookmark(self, state: Importing):
-        url = self.extract_source_url()
-
         try:
-            await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(url))
+            await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(state.url))
         except UserException as e:
-            logger.warning("Failed to unbookmark {}: {}", url, e)
+            logger.warning("Failed to unbookmark {}: {}", state.url, e)
             await self.query.answer("Failed to unbookmark", show_alert=True)
         else:
             await self.query.answer("Unbookmarked")
-            await self.import_advance(self.message.chat, state.rid, state.handle)
+            await self.remove_buttons("Unbookmarked")
+            await self.import_advance(self.message.chat, state)
 
     async def handle_import_commit(self, state: Importing):
         target = self.user.forward
@@ -233,21 +227,20 @@ class ButtonResponder(ContextualResponder):
             await self.query.answer()
             raise UserException("No forward target set. Use /forward to choose one")
 
-        url = self.extract_source_url()
         chat = self.message.chat
         album = await self.get_album(self.message)
 
         await self.bot.forward_messages(target, chat.id, [message.id for message in album])
-        self.mark_skipped(url)
+        self.mark_skipped(state.url)
 
         try:
-            await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(url))
+            await self.twitter.remove_bookmark_of(state.handle, parse_tweet_id(state.url))
         except UserException:
             await self.query.answer("Forwarded, but failed to unbookmark", show_alert=True)
         else:
             await self.query.answer("Forwarded and unbookmarked")
             await self.remove_buttons("Forwarded & Unbookmarked")
-            await self.import_advance(chat, state.rid, state.handle)
+            await self.import_advance(chat, state)
 
     async def handle_import_leftover(self):
         await self.query.answer("These buttons are no longer relevant")
@@ -264,21 +257,21 @@ class ButtonResponder(ContextualResponder):
 
         raise UserException("Cannot find post source. Please send the source URL again")
 
-    async def import_advance(self, chat: Chat, rid: str, handle: str):
+    async def import_advance(self, chat: Chat, state: Importing):
         """
         Send the next bookmark worth showing, passing over the rest.
         """
 
-        generator = self.ctx.cache.gen.get(rid)
+        generator = self.ctx.cache.gen.get(state.rid)
         if generator is None:
-            generator = self.twitter.bookmarks_of(handle)
-            self.ctx.cache.gen.put(rid, generator)
+            generator = self.twitter.bookmarks_of(state.handle)
+            self.ctx.cache.gen.put(state.rid, generator)
 
         while True:
             try:
                 tweet = await anext(generator)
             except StopAsyncIteration:
-                await self.ctx.cache.gen.discard(rid)
+                await self.ctx.cache.gen.discard(state.rid)
                 self.user.reset_state()
                 self.user.save()
                 await self.bot.send_message(chat.id, "No more bookmarks")
@@ -294,13 +287,19 @@ class ButtonResponder(ContextualResponder):
                 media = await self.get_media(post)
             except UserException as e:
                 # One unrenderable post should not abandon a whole run.
-                logger.warning("Skipping {} during import: {}", url, e)
+                await self.notify(f"Failed to get media for post {url}\n{e}")
                 continue
 
             if not media:
                 continue
 
-            await self.send_album(chat, post, media, self.markup_import(rid))
+            state.url = url
+            state.multi = len(media) > 1
+            self.user.state = state
+            self.user.save()
+
+            await self.send_album(chat, post, media, self.markup_import(state))
+
             return
 
     async def get_album(self, message: Message) -> list[Message]:
